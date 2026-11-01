@@ -1,4 +1,6 @@
+import warnings
 import torch
+from photutils.detection.daofinder import NoDetectionsWarning
 
 from astro_project.core.photometry import detect_sources
 from astro_project.pipeline.kinematics import kinematic_shift_and_stack
@@ -35,11 +37,13 @@ def run_velocity_search(
                     vy=vy,
                     method="median",
                 )
-                sources = detect_sources(
-                    stacked,
-                    threshold=detection_threshold,
-                    fwhm=fwhm,
-                )
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", NoDetectionsWarning)
+                    sources = detect_sources(
+                        stacked,
+                        threshold=detection_threshold,
+                        fwhm=fwhm,
+                    )
                 if sources is not None and len(sources) > 0:
                     for row in sources:
                         detections.append(
