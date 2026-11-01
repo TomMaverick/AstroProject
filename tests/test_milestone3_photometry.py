@@ -44,8 +44,8 @@ def test_source_detection_subpixel_accuracy(device):
     sources = detect_sources(image, threshold=50.0, fwhm=fwhm)
     assert sources is not None
     assert len(sources) == 3
-    sources.sort('ycentroid')
+    sources.sort("y_centroid")
     true_stars.sort()
     for i, (y0, x0, _) in enumerate(true_stars):
-        assert sources['ycentroid'][i] == pytest.approx(y0, abs=0.05)
-        assert sources['xcentroid'][i] == pytest.approx(x0, abs=0.05)
+        assert sources["y_centroid"][i] == pytest.approx(y0, abs=0.05)
+        assert sources["x_centroid"][i] == pytest.approx(x0, abs=0.05)

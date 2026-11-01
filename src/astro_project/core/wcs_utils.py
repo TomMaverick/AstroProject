@@ -1,5 +1,7 @@
 import numpy as np
 from astropy.wcs import WCS
+import astropy.units as u
+from astropy.coordinates import SkyCoord
 
 
 def get_wcs(header) -> WCS:
@@ -32,3 +34,11 @@ def world_to_pix(wcs: WCS, ra, dec):
     """Transformiert Himmelskoordinaten (RA, Dec in Grad) zu Pixelkoordinaten (X, Y) mit origin=0."""
     x_pix, y_pix = wcs.wcs_world2pix(ra, dec, 0)
     return x_pix, y_pix
+
+
+def sources_to_skycoords(sources, wcs: WCS) -> SkyCoord:
+    """Konvertiert eine Astropy-Quellentabelle (x_centroid, y_centroid) per WCS in SkyCoord (ICRS)."""
+    x_coords = np.asarray(sources["x_centroid"], dtype=np.float64)
+    y_coords = np.asarray(sources["y_centroid"], dtype=np.float64)
+    ra, dec = pix_to_world(wcs, x_coords, y_coords)
+    return SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame="icrs")
