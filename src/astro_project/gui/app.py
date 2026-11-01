@@ -131,10 +131,10 @@ def render_sidebar_statusbar() -> torch.device:
 
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
-            if st.button("🔄 Refresh", use_container_width=True):
+            if st.button("🔄 Refresh", width="stretch"):
                 st.rerun()
         with col_btn2:
-            if st.button("🧹 VRAM Flush", use_container_width=True):
+            if st.button("🧹 VRAM Flush", width="stretch"):
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 st.rerun()
@@ -281,13 +281,13 @@ def render_tab_fits_inspector(device: torch.device):
         p1, p2 = st.columns(2)
         with p1:
             fig_raw = _plot_fits_frame(img_np, "Rohbild [Y, X]")
-            st.pyplot(fig_raw, use_container_width=True)
+            st.pyplot(fig_raw, width="stretch")
             plt.close(fig_raw)
         with p2:
             fig_det = _plot_fits_frame(
                 res_np, "Hintergrundbereinigt + DAOStarFinder", sources=sources
             )
-            st.pyplot(fig_det, use_container_width=True)
+            st.pyplot(fig_det, width="stretch")
             plt.close(fig_det)
 
         # WCS-Astrometry & Source table
@@ -313,7 +313,7 @@ def render_tab_fits_inspector(device: torch.device):
                 )
                 if c in df.columns
             ]
-            st.dataframe(df[preferred_cols], use_container_width=True, height=300)
+            st.dataframe(df[preferred_cols], width="stretch", height=300)
         else:
             st.warning("Keine Punktquellen oberhalb des gewählten Schwellenwerts detektiert.")
 
@@ -327,7 +327,7 @@ def render_tab_fits_inspector(device: torch.device):
                 for k in header.keys()
                 if str(k).strip()
             ]
-            st.dataframe(pd.DataFrame(header_items), use_container_width=True, height=260)
+            st.dataframe(pd.DataFrame(header_items), width="stretch", height=260)
 
     finally:
         if temp_file_path is not None and temp_file_path.exists():
