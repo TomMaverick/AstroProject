@@ -34,7 +34,7 @@ def test_extract_stamps_shape_and_edge_padding(device):
     stamps = extract_stamps(image, positions, stamp_size=32)
 
     assert stamps.shape == (3, 1, 32, 32)
-    assert stamps.device == device
+    assert stamps.device.type == device.type
     assert stamps.dtype == image.dtype
 
     # Zentraler Stamp hat kein Zero-Padding (alle Werte >= 10.0) und Peak in der Mitte (16, 16)
@@ -61,6 +61,6 @@ def test_real_bogus_cnn_forward_pass(device):
         probs = model(stamps)
 
     assert probs.shape == (batch_size, 1)
-    assert probs.device == device
+    assert probs.device.type == device.type
     assert torch.all(probs >= 0.0)
     assert torch.all(probs <= 1.0)

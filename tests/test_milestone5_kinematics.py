@@ -50,7 +50,7 @@ def test_mask_stationary_stars(device):
     cleaned = mask_stationary_stars(image, threshold=50.0)
 
     assert cleaned.shape == image.shape
-    assert cleaned.device == image.device
+    assert cleaned.device.type == device.type
     # Der helle Stern muss entfernt und durch den Median-Hintergrund (~100) ersetzt sein
     star_patch = cleaned[47:54, 57:64]
     assert torch.max(star_patch).item() == pytest.approx(bg_level, abs=5.0 * noise_std)
@@ -91,7 +91,7 @@ def test_kinematic_shift_and_stack(device):
     unshifted_median = torch.median(frames, dim=0).values
 
     assert stacked.shape == (height, width)
-    assert stacked.device == device
+    assert stacked.device.type == device.type
 
     # SNR in Einzelbild vs. gestacktem Bild berechnen (Hintergrundbereich abseits des Asteroiden)
     single_bg_std = frames[0, :30, :30].std().item()

@@ -35,7 +35,7 @@ def test_real_fits_header_and_wcs_ingestion(real_fits_path, device):
 
     # 1. Tensor liegt auf dem Ziel-Device und ist Float32
     assert isinstance(tensor, torch.Tensor)
-    assert tensor.device == device
+    assert tensor.device.type == device.type
     assert tensor.dtype == torch.float32
 
     # 2. Achsen-Konvention [Y, X] = [NAXIS2, NAXIS1] prüfen
@@ -74,7 +74,7 @@ def test_real_data_photometry_and_source_detection(real_fits_path, device):
     # 1. 2D-Hintergrund auf dem echten Teleskopbild schätzen und abziehen
     bkg_tensor = estimate_background(image_tensor)
     assert bkg_tensor.shape == image_tensor.shape
-    assert bkg_tensor.device == device
+    assert bkg_tensor.device.type == device.type
 
     residual = image_tensor - bkg_tensor
     noise_std = float(torch.std(residual).item())

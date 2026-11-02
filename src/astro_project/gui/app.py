@@ -450,12 +450,219 @@ def render_tab_pipeline_grid_search(device: torch.device):
                 torch.cuda.empty_cache()
 
 
+def _plot_inspector_frame(
+    image_np: np.ndarray,
+    title: str,
+    sources_df: pd.DataFrame | None = None,
+) -> plt.Figure:
+    """Creates a Dark-Mode matplotlib figure for the FITS Inspector (Raw vs. Background-subtracted with detections)."""
+    fig, ax = plt.subplots(figsize=(6, 5), facecolor="#0b0f19")
+    ax.set_facecolor("#0b0f19")
+
+    vmin, vmax = np.percentile(image_np, [5.0, 99.5])
+    if vmax <= vmin:
+        vmax = vmin + 1.0
+
+    im = ax.imshow(image_np, origin="lower", cmap="magma", vmin=vmin, vmax=vmax)
+
+    if sources_df is not None and len(sources_df) > 0:
+        ax.scatter(
+            sources_df["x_centroid"],
+            sources_df["y_centroid"],
+            s=80,
+            facecolors="none",
+            edgecolors="#38bdf8",
+            linewidths=1.2,
+            label=f"Detected ({len(sources_df)})",
+        )
+        ax.legend(
+            loc="upper right",
+            facecolor="#1e293b",
+            edgecolor="#38bdf8",
+            labelcolor="#f8fafc",
+        )
+
+    ax.set_title(title, color="#f8fafc", fontsize=11)
+    ax.set_xlabel("X [Pixel]", color="#94a3b8")
+    ax.set_ylabel("Y [Pixel]", color="#94a3b8")
+    ax.tick_params(colors="#94a3b8")
+    for spine in ax.spines.values():
+        spine.set_color("#334155")
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.ax.yaxis.set_tick_params(color="#94a3b8")
+    plt.setp(plt.getp(cbar.ax.axes, "yticklabels"), color="#94a3b8")
+    fig.tight_layout()
+    return fig
+
+
 def render_tab_fits_inspector(device: torch.device):
     """Tab 1: FITS-Inspector & Photometrie"""
     st.subheader("🔭 FITS-Inspector & Photometrie")
 
-    # Placeholder content for the FITS-Inspector tab
-    st.write("This is the FITS-Inspector tab. You can add your implementation here.")
+    data_dir = Path("data")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    local_fits = sorted(
+        [
+            p
+            for p in data_dir.rglob("*")
+            if p.is_file() and p.suffix.lower() in (".fits", ".fit", ".fts")
+        ]
+    )
+
+    col_src, col_ctrl1, col_ctrl2 = st.columns([2, 1, 1])
+    with col_src:
+        source_mode = st.radio(
+            "FITS Data Source",
+            options=[
+                "Local data/ directory",
+                "Astropy Sample (HorseHead.fits)",
+                "Upload FITS file",
+            ],
+            horizontal=True,
+        )
+    with col_ctrl1:
+        sigma_thresh = st.slider(
+            "Detection Threshold (sigma above background)",
+            min_value=1.5,
+            max_value=20.0,
+            value=5.0,
+            step=0.5,
+        )
+    with col_ctrl2:
+        fwhm_val = st.slider(
+            "DAOStarFinder FWHM [px]",
+            min_value=1.5,
+            max_value=10.0,
+            value=3.0,
+            step=0.5,
+        )
+
+    target_fits_path: str | None = None
+    temp_upload_path: Path | None = None
+
+    if source_mode == "Local data/ directory":
+        if len(local_fits) == 0:
+            st.info(
+                "No FITS files found in `data/`. Switch to 'Astropy Sample (HorseHead.fits)', upload a FITS file, or generate the synthetic series in Tab 2."
+            )
+            return
+        selected_rel = st.selectbox(
+            "Select FITS file from data/",
+            options=[str(p.relative_to(data_dir)) for p in local_fits],
+        )
+        target_fits_path = str(data_dir / selected_rel)
+    elif source_mode == "Astropy Sample (HorseHead.fits)":
+        try:
+            target_fits_path = get_pkg_data_filename(
+                "tutorials/FITS-images/HorseHead.fits"
+            )
+        except Exception as exc:
+            st.error(f"Could not load Astropy sample FITS file: {exc}")
+            return
+    else:
+        uploaded = st.file_uploader(
+            "Upload FITS Image (.fits, .fit, .fts)",
+            type=["fits", "fit", "fts"],
+        )
+        if uploaded is None:
+            st.info("Please upload a FITS file to inspect.")
+            return
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".fits")
+        tmp.write(uploaded.read())
+        tmp.flush()
+        tmp.close()
+        temp_upload_path = Path(tmp.name)
+        target_fits_path = str(temp_upload_path)
+
+    try:
+        with torch.no_grad():
+            image_t, wcs, header = load_fits_image(target_fits_path, device=device)
+            bkg_t = estimate_background(image_t)
+            residual_t = image_t - bkg_t
+
+            height, width = image_t.shape
+            bkg_median = float(torch.median(bkg_t).item())
+            noise_std = float(torch.std(residual_t).item())
+            abs_threshold = max(float(sigma_thresh) * noise_std, 1e-6)
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", NoDetectionsWarning)
+                sources = detect_sources(
+                    residual_t, threshold=abs_threshold, fwhm=float(fwhm_val)
+                )
+
+            sources_df: pd.DataFrame | None = None
+            n_sources = 0
+            if sources is not None and len(sources) > 0:
+                n_sources = len(sources)
+                if wcs is not None and wcs.is_celestial:
+                    try:
+                        sky_coords = sources_to_skycoords(sources, wcs)
+                        sources["ra"] = sky_coords.ra.deg
+                        sources["dec"] = sky_coords.dec.deg
+                    except Exception:
+                        pass
+                sources_df = sources.to_pandas()
+
+            raw_np = image_t.detach().cpu().numpy()
+            res_np = residual_t.detach().cpu().numpy()
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Tensor Shape [Y, X]", f"[{height}, {width}]")
+        m2.metric("Background Median", f"{bkg_median:.2f} ADU")
+        m3.metric("Noise Level (1σ)", f"{noise_std:.2f} ADU")
+        m4.metric("Detected Sources", f"{n_sources}")
+
+        p_col1, p_col2 = st.columns(2)
+        with p_col1:
+            fig_raw = _plot_inspector_frame(
+                raw_np,
+                f"Raw Image [{height}×{width}]",
+            )
+            st.pyplot(fig_raw, width="stretch")
+            plt.close(fig_raw)
+        with p_col2:
+            fig_res = _plot_inspector_frame(
+                res_np,
+                f"Background Subtracted + DAOStarFinder ({sigma_thresh:.1f}σ, FWHM={fwhm_val:.1f})",
+                sources_df=sources_df,
+            )
+            st.pyplot(fig_res, width="stretch")
+            plt.close(fig_res)
+
+        st.markdown("#### 📋 Detected Sources Catalog")
+        if sources_df is not None and len(sources_df) > 0:
+            st.dataframe(sources_df, width="stretch", height=280)
+        else:
+            st.info(
+                "No sources detected above the selected threshold. Try lowering the Detection Threshold slider."
+            )
+
+        with st.expander("📄 FITS Header Metadata"):
+            if header is not None:
+                hdr_rows = [
+                    {
+                        "Keyword": str(k),
+                        "Value": str(header[k]),
+                        "Comment": str(header.comments[k]),
+                    }
+                    for k in header.keys()
+                    if str(k).strip() != ""
+                ]
+                st.dataframe(pd.DataFrame(hdr_rows), width="stretch", height=260)
+            else:
+                st.write("No FITS header available.")
+    except Exception as exc:
+        st.error(f"Error inspecting FITS file: {exc}")
+    finally:
+        if temp_upload_path is not None and temp_upload_path.exists():
+            try:
+                temp_upload_path.unlink()
+            except OSError:
+                pass
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
 
 def main():

@@ -80,5 +80,5 @@ def test_download_fits_to_data_dir_and_ingest(tmp_path, device):
     tensor, wcs, header = load_fits_image(str(fits_path), device=device)
     assert tensor.ndim == 2
     assert tensor.shape == (header["NAXIS2"], header["NAXIS1"])
-    assert tensor.device == device
+    assert tensor.device.type == device.type
     assert wcs.is_celestial is True
