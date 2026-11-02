@@ -73,6 +73,11 @@ def extract_multichannel_stamps(
     """
     if isinstance(frames_or_maps, tuple):
         mean_img, median_img, var_img = frames_or_maps
+        if mean_img.ndim != 2 or median_img.ndim != 2 or var_img.ndim != 2:
+            raise ValueError(
+                f"Expected 2D [Y, X] tensors in (mean, median, var) tuple, got shapes "
+                f"{mean_img.shape}, {median_img.shape}, {var_img.shape}"
+            )
     elif isinstance(frames_or_maps, torch.Tensor) and frames_or_maps.ndim == 3:
         mean_img = torch.mean(frames_or_maps, dim=0)
         median_img = torch.median(frames_or_maps, dim=0).values

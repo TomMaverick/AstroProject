@@ -112,6 +112,8 @@ def single_pass_wcs_kinematic_stack(
         return torch.mean(shifted, dim=0)
     elif method == "sum":
         return torch.sum(shifted, dim=0)
+    elif method in ("none", None):
+        return shifted
     else:
         raise ValueError(f"Unknown stacking method: {method}")
 

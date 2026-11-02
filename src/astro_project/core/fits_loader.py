@@ -65,16 +65,11 @@ def load_fits(file_path, hdu_index: int | None = None):
     return data, header
 
 
-def save_fits_image(
-    tensor: torch.Tensor,
-    file_path: Union[str, Path],
-    wcs: WCS | None = None,
-    header: fits.Header | None = None,
-) -> None:
+def save_fits_image(tensor: torch.Tensor, file_path, wcs=None, header=None):
     """Saves a 2D [Y, X] PyTorch tensor mock-free as a FITS file with optional WCS/header."""
     data_np = tensor.detach().cpu().numpy().astype(np.float32)
     out_header = header.copy() if header is not None else fits.Header()
     if wcs is not None:
         out_header.update(wcs.to_header())
-    out_header["CREATOR"] = "AstroProject Pipeline"
+    out_header['CREATOR'] = 'AstroProject Pipeline'
     fits.writeto(str(file_path), data_np, header=out_header, overwrite=True)

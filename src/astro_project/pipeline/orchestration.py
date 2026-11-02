@@ -7,6 +7,7 @@ from astro_project.core.classifier import extract_multichannel_stamps, extract_s
 from astro_project.core.fits_loader import load_fits_image
 from astro_project.core.photometry import estimate_background
 from astro_project.core.wcs_utils import sources_to_skycoords, compute_wcs_frame_offsets
+from astro_project.core.hardware import resolve_device
 from astro_project.pipeline.kinematics import (
     single_pass_wcs_kinematic_stack,
     mask_stationary_stars,
@@ -36,10 +37,7 @@ def run_pipeline(
     4. Stamps extrahieren und optional mit RealBogusCNN klassifizieren/filtern
     5. Pixelkoordinaten über WCS in RA/Dec (ICRS) umrechnen und als Astropy Table exportieren
     """
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    else:
-        device = torch.device(device)
+    device = resolve_device(device)
 
     if len(file_paths) == 0:
         raise ValueError("file_paths must not be empty")
@@ -116,6 +114,7 @@ def run_pipeline(
                     vx=cand["vx"],
                     vy=cand["vy"],
                     wcs_offsets_xy=wcs_offsets,
+                    method="none",
                 )
                 mean_img = torch.mean(shifted, dim=0)
                 median_img = torch.median(shifted, dim=0).values
