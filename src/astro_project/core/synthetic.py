@@ -8,6 +8,25 @@ from astro_project.core.fits_loader import save_fits_image
 from astro_project.core.wcs_utils import create_synthetic_wcs, pix_to_world
 
 
+def generate_synthetic_sky(
+    n_frames: int, height: int, width: int, x0: float, y0: float, 
+    vx: float, vy: float, flux: float, sigma: float, noise_std: float = 0.0, 
+    device: Union[str, torch.device] = "cpu"
+) -> torch.Tensor:
+    device = torch.device(device)
+    y_coords = torch.arange(height, dtype=torch.float32, device=device)
+    x_coords = torch.arange(width, dtype=torch.float32, device=device)
+    grid_y, grid_x = torch.meshgrid(y_coords, x_coords, indexing="ij")
+    grid_y, grid_x = grid_y.unsqueeze(0), grid_x.unsqueeze(0)
+    t = torch.arange(n_frames, dtype=torch.float32, device=device).view(-1, 1, 1)
+    x_t, y_t = x0 + vx * t, y0 + vy * t
+    norm_factor = flux / (2.0 * math.pi * (sigma**2))
+    frames = norm_factor * torch.exp(-((grid_x - x_t)**2 + (grid_y - y_t)**2) / (2.0 * sigma**2))
+    if noise_std > 0.0:
+        frames += torch.randn_like(frames) * noise_std
+    return frames
+
+
 def generate_demo_asteroid_series(
     output_dir: Union[str, Path],
     n_frames: int = 5,

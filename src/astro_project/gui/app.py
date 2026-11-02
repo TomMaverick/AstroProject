@@ -20,7 +20,7 @@ from photutils.detection.daofinder import NoDetectionsWarning
 from astro_project.core.classifier import RealBogusCNN
 from astro_project.core.fits_loader import load_fits_image
 from astro_project.core.photometry import detect_sources, estimate_background
-from astro_project.core.synthetic import generate_demo_asteroid_series
+from astro_project.core.synthetic import generate_demo_asteroid_series, generate_synthetic_sky
 from astro_project.core.wcs_utils import sources_to_skycoords
 from astro_project.pipeline.kinematics import (
     kinematic_shift_and_stack,
@@ -180,24 +180,29 @@ def render_sidebar_controls() -> torch.device:
 
 
 def render_top_statusbar(device: torch.device):
-    """Rendert die ultra-kompakte ~1cm (34px) horizontale Statusbar ganz oben im Hauptbereich."""
+    """Rendert die ultra-kompakte ~1cm (34px) horizontale Statusbar via st.columns ganz oben im Hauptbereich."""
     metrics = get_hardware_metrics()
-    st.markdown(
-        f"""
-        <div class="top-statusbar">
-            <span>⚡ <b>CPU:</b> {metrics['cpu_percent']:.1f}%</span>
-            <span>|</span>
-            <span>🧠 <b>RAM:</b> {metrics['ram_percent']:.1f}% ({metrics['ram_used_gb']:.1f}/{metrics['ram_total_gb']:.0f} GB)</span>
-            <span>|</span>
-            <span>🎮 <b>GPU:</b> {metrics['gpu_name']}</span>
-            <span>|</span>
-            <span>💾 <b>VRAM:</b> {metrics['vram_used_gb']:.2f} / {metrics['vram_total_gb']:.2f} GB</span>
-            <span>|</span>
-            <span>🎯 <b>Device:</b> <code class="status-badge">{device.type.upper()}</code></span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    c_cpu, c_ram, c_vram, c_dev = st.columns(4)
+    with c_cpu:
+        st.markdown(
+            f"<div class='top-statusbar'><span>⚡ <b>CPU:</b> {metrics['cpu_percent']:.1f}%</span></div>",
+            unsafe_allow_html=True,
+        )
+    with c_ram:
+        st.markdown(
+            f"<div class='top-statusbar'><span>🧠 <b>RAM:</b> {metrics['ram_percent']:.1f}% ({metrics['ram_used_gb']:.1f}/{metrics['ram_total_gb']:.0f} GB)</span></div>",
+            unsafe_allow_html=True,
+        )
+    with c_vram:
+        st.markdown(
+            f"<div class='top-statusbar'><span>🎮 <b>RTX 4070 VRAM:</b> {metrics['vram_used_gb']:.2f} / {metrics['vram_total_gb']:.2f} GB</span></div>",
+            unsafe_allow_html=True,
+        )
+    with c_dev:
+        st.markdown(
+            f"<div class='top-statusbar'><span>🎯 <b>Device:</b> <code class='status-badge'>{device.type.upper()}</code></span></div>",
+            unsafe_allow_html=True,
+        )
 
 
 def _plot_comparison_frame(
@@ -270,7 +275,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
             try:
                 with torch.no_grad():
                     paths, times, gt = generate_demo_asteroid_series(
-                        output_dir=series_demo_dir,
+                        output_dir="data/series_demo",
                         n_frames=5,
                         height=128,
                         width=128,
@@ -283,7 +288,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 st.success(
-                    f"5-Frame FITS-Serie erfolgreich in `{series_demo_dir}` erzeugt (Ground-Truth: vx={gt['vx']} px/h, vy={gt['vy']} px/h, Start=({gt['x0']:.1f}, {gt['y0']:.1f}))."
+                    f"5-Frame FITS-Serie erfolgreich in `data/series_demo` erzeugt (Ground-Truth: vx={gt['vx']} px/h, vy={gt['vy']} px/h, Start=({gt['x0']:.1f}, {gt['y0']:.1f}))."
                 )
             except Exception as exc:
                 st.error(f"Fehler beim Erzeugen der 5-Frame-Serie: {exc}")
@@ -459,6 +464,10 @@ def main():
         page_icon="☄️",
         layout="wide",
         initial_sidebar_state="expanded",
+    )
+    st.markdown(
+        """<style>header[data-testid="stHeader"] { background: transparent; height: 1.5rem; } .block-container { padding-top: 2.2rem !important; }</style>""",
+        unsafe_allow_html=True,
     )
     st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
 
