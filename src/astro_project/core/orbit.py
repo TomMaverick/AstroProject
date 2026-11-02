@@ -207,3 +207,29 @@ def format_mpc80_line(
         f"{col_57_65}{mag_str}{col_72_77}{obs_str}"
     )
     return line[:80].ljust(80)
+
+
+def export_tracklet_mpc80(
+    tracklet_epochs: Sequence[dict],
+    designation: str = "K26A00A",
+    mag: float = 20.0,
+    band: str = "V",
+    obs_code: str = "500",
+) -> str:
+    """
+    Format a sequence of tracklet epochs (each containing 'mjd', 'ra_deg', 'dec_deg')
+    into a multi-line 80-column Minor Planet Center (MPC) report string.
+    """
+    lines = [
+        format_mpc80_line(
+            designation=designation,
+            mjd=float(ep["mjd"]),
+            ra_deg=float(ep["ra_deg"]),
+            dec_deg=float(ep["dec_deg"]),
+            mag=mag,
+            band=band,
+            obs_code=obs_code,
+        )
+        for ep in tracklet_epochs
+    ]
+    return "\n".join(lines)
