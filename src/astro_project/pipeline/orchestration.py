@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from astropy.table import Table
 
-from astro_project.core.classifier import extract_stamps
+from astro_project.core.classifier import extract_multichannel_stamps, extract_stamps
 from astro_project.core.fits_loader import load_fits_image
 from astro_project.core.photometry import estimate_background
 from astro_project.core.wcs_utils import sources_to_skycoords
@@ -11,7 +11,10 @@ from astro_project.pipeline.kinematics import (
     kinematic_shift_and_stack,
     mask_stationary_stars,
 )
-from astro_project.pipeline.velocity_search import run_velocity_search
+from astro_project.pipeline.velocity_search import (
+    _shift_frames_along_trajectory,
+    run_velocity_search,
+)
 
 
 def run_pipeline(
@@ -26,6 +29,7 @@ def run_pipeline(
     star_mask_threshold: float = 200.0,
     cnn_threshold: float = 0.5,
     fwhm: float = 3.0,
+    use_psi_phi: bool = False,
 ) -> Table:
     """
     End-to-End Pipeline zur Detektion bewegter Objekte (Asteroiden) aus FITS-Zeitserien:
@@ -81,6 +85,8 @@ def run_pipeline(
         steps=steps,
         detection_threshold=detection_threshold,
         fwhm=fwhm,
+        use_psi_phi=use_psi_phi,
+        trim_fraction=0.2,
     )
 
     colnames = ("x_centroid", "y_centroid", "ra", "dec", "vx", "vy", "flux", "peak", "cnn_score")
@@ -97,23 +103,34 @@ def run_pipeline(
         cnn_model.eval()
 
     with torch.no_grad():
-        stack_cache: dict[tuple[float, float], torch.Tensor] = {}
+        stack_cache: dict[tuple[float, float], tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = {}
         for cand in raw_candidates:
             vel_key = (cand["vx"], cand["vy"])
             if vel_key not in stack_cache:
-                stack_cache[vel_key] = kinematic_shift_and_stack(
+                shifted = _shift_frames_along_trajectory(
                     frames=frames,
                     times_hours=times_tensor,
                     vx=cand["vx"],
                     vy=cand["vy"],
-                    method="median",
                 )
-            stacked_img = stack_cache[vel_key]
-            stamps = extract_stamps(
-                stacked_img,
-                [(cand["x_centroid"], cand["y_centroid"])],
-                stamp_size=32,
-            )
+                mean_img = torch.mean(shifted, dim=0)
+                median_img = torch.median(shifted, dim=0).values
+                var_img = torch.var(shifted, dim=0, unbiased=False)
+                stack_cache[vel_key] = (mean_img, median_img, var_img)
+
+            mean_img, median_img, var_img = stack_cache[vel_key]
+            if getattr(cnn_model, "in_channels", 1) == 3:
+                stamps = extract_multichannel_stamps(
+                    (mean_img, median_img, var_img),
+                    [(cand["x_centroid"], cand["y_centroid"])],
+                    stamp_size=32,
+                )
+            else:
+                stamps = extract_stamps(
+                    mean_img,
+                    [(cand["x_centroid"], cand["y_centroid"])],
+                    stamp_size=32,
+                )
 
             if cnn_model is not None:
                 score = float(cnn_model(stamps)[0, 0].item())
