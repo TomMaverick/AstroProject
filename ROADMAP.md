@@ -19,5 +19,5 @@
 - [ ] **Multi-Stamp Blink-Viewer & MPC-Export:** Visueller Vergleich (`Mean`, `Median`, `Even`, `Odd`, Einzel-Frames) in der GUI sowie Export im offiziellen 80-Spalten-MPC-/ADES-Format.
 
 ## Meilenstein 13: Autonomes Nachbarfeld-Tracking & Stellarium-Bridge (`tracker.py`, `stellarium.py`)
-- [ ] **Bildrand-Extrapolation & Auto-Fetch:** Vorhersage von Austrittszeitpunkt `t_exit` und Zielkoordinaten `(RA_next, Dec_next)` am Bildrand mit automatischem Nachladen angrenzender FITS-Cutouts.
-- [ ] **Stellarium RemoteControl Integration:** Direkte Anbindung an `http://localhost:8090/api/` zum automatischen Setzen der Beobachtungszeit und Schwenken der Stellarium-Kamera auf gefundene Kandidaten sowie Export berechneter Orbits für Stellarium.
+- [x] **Bildrand-Extrapolation & Auto-Fetch:** Vorhersage von Austrittszeitpunkt `t_exit` und Zielkoordinaten `(RA_next, Dec_next)` am Bildrand mit automatischem Nachladen angrenzender FITS-Cutouts.
+- [x] **Stellarium RemoteControl Integration:** Direkte Anbindung an `http://localhost:8090/api/` zum automatischen Setzen der Beobachtungszeit und Schwenken der Stellarium-Kamera auf gefundene Kandidaten sowie Export berechneter Orbits für Stellarium.
