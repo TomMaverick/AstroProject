@@ -963,12 +963,14 @@ def render_tab_pipeline_grid_search(device: torch.device):
                 st.markdown(f"**Exzentrizität e / Inkl. i:** `e={orb['e']:.2f}` | `i={orb['i_deg']:.1f}°`")
                 st.markdown(f"**Cross-Match:** `{match_status}` ({matched_id}, {sep_arcsec:.2f}\")")
             with c_exit:
+                next_ra = exit_info.get("next_field_ra_deg", exit_info.get("ra_next_deg", 0.0))
+                next_dec = exit_info.get("next_field_dec_deg", exit_info.get("dec_next_deg", 0.0))
                 st.markdown(f"**Feld-Austritt (Tracker):** `{exit_info['exit_edge']}` in `{exit_info['t_exit_hours']:.2f} h`")
                 st.caption(
                     f"Austritts-Koordinate: RA={exit_info['ra_exit_deg']:.5f}° | Dec={exit_info['dec_exit_deg']:.5f}°"
                 )
                 st.caption(
-                    f"Nachbarfeld-Zentrum: RA={exit_info['next_field_ra_deg']:.5f}° | Dec={exit_info['next_field_dec_deg']:.5f}°"
+                    f"Nachbarfeld-Zentrum: RA={next_ra:.5f}° | Dec={next_dec:.5f}°"
                 )
             with c_mpc:
                 mpc_block = export_tracklet_mpc80(tracklet, designation="K26A00A")

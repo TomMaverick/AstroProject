@@ -38,16 +38,21 @@ def predict_boundary_exit(
     positive = [(t, edge) for t, edge in candidates if t >= 0.0]
     if not positive:
         ra0, dec0 = pix_to_world(wcs, float(x0), float(y0))
+        ra0_f, dec0_f = float(ra0), float(dec0)
         return {
             "t_exit_hours": math.inf,
             "mjd_exit": math.inf,
             "exit_edge": "stationary",
             "x_exit": float(x0),
             "y_exit": float(y0),
-            "ra_exit_deg": float(ra0),
-            "dec_exit_deg": float(dec0),
-            "ra_next_deg": float(ra0),
-            "dec_next_deg": float(dec0),
+            "ra_exit_deg": ra0_f,
+            "dec_exit_deg": dec0_f,
+            "ra_next_deg": ra0_f,
+            "dec_next_deg": dec0_f,
+            "next_field_ra_deg": ra0_f,
+            "next_field_dec_deg": dec0_f,
+            "next_file_ra_deg": ra0_f,
+            "next_file_dec_deg": dec0_f,
         }
 
     t_exit_hours, exit_edge = min(positive, key=lambda item: item[0])
@@ -60,6 +65,7 @@ def predict_boundary_exit(
 
     ra_exit, dec_exit = pix_to_world(wcs, x_exit, y_exit)
     ra_next, dec_next = pix_to_world(wcs, x_next, y_next)
+    ra_next_f, dec_next_f = float(ra_next), float(dec_next)
 
     return {
         "t_exit_hours": float(t_exit_hours),
@@ -69,6 +75,10 @@ def predict_boundary_exit(
         "y_exit": float(y_exit),
         "ra_exit_deg": float(ra_exit),
         "dec_exit_deg": float(dec_exit),
-        "ra_next_deg": float(ra_next),
-        "dec_next_deg": float(dec_next),
+        "ra_next_deg": ra_next_f,
+        "dec_next_deg": dec_next_f,
+        "next_field_ra_deg": ra_next_f,
+        "next_field_dec_deg": dec_next_f,
+        "next_file_ra_deg": ra_next_f,
+        "next_file_dec_deg": dec_next_f,
     }
