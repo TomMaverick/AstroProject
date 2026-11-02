@@ -445,6 +445,14 @@ def render_tab_pipeline_grid_search(device: torch.device):
                 torch.cuda.empty_cache()
 
 
+def render_tab_fits_inspector(device: torch.device):
+    """Tab 1: FITS-Inspector & Photometrie"""
+    st.subheader("🔭 FITS-Inspector & Photometrie")
+
+    # Placeholder content for the FITS-Inspector tab
+    st.write("This is the FITS-Inspector tab. You can add your implementation here.")
+
+
 def main():
     st.set_page_config(
         page_title="AstroProject | GPU Asteroid Pipeline",
