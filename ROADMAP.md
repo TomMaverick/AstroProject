@@ -10,8 +10,8 @@
 - [ ] **3-Kanal-CNN (`[Mean, Median, Variance]`) & Real-Background Implanting:** Erweiterung des `RealBogusCNN` auf 3 Kanäle sowie automatischer Trainings-Generator (`calibrate_on_field`), der echte Feldsterne als empirische PSF klont und als schwache Fake-Asteroiden gegen echte Hintergrund-Artefakte trainiert (`models/real_bogus_3ch.pt`).
 
 ## Meilenstein 11: Single-Pass WCS-Registrierung & Multi-HDU FITS (`wcs_utils.py`, `fits_loader.py`)
-- [ ] **Kombinierte WCS- & Kinematik-Transformation:** Verschmelzung von Teleskop-Drift-Korrektur (`origin=0`) und `(vx, vy)`-Shift in einem einzigen flusserhaltenden `F.grid_sample(..., align_corners=False)` Aufruf.
-- [ ] **Robuster Multi-HDU FITS-Loader:** Unterstützung für komprimierte Archiv-FITS (`.fits.fz`) und mehrdimensionale HDUs.
+- [x] **Kombinierte WCS- & Kinematik-Transformation:** Verschmelzung von Teleskop-Drift-Korrektur (`origin=0`) und `(vx, vy)`-Shift in einem einzigen flusserhaltenden `F.grid_sample(..., align_corners=False)` Aufruf.
+- [x] **Robuster Multi-HDU FITS-Loader:** Unterstützung für komprimierte Archiv-FITS (`.fits.fz`) und mehrdimensionale HDUs.
 
 ## Meilenstein 12: Bahnbestimmung, Known-Object Cross-Match & MPC-Export (`orbit.py`, `catalog_match.py`)
 - [ ] **Kepler-Bahnschätzung (IOD):** Berechnung von `(RA, Dec)` zu `t_start, t_mid, t_end` sowie Schätzung der heliozentrischen Bahnelemente (`a, e, i, Omega, omega, M`) via Väisälä/Gauß-Methode.

@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from photutils.detection.daofinder import NoDetectionsWarning
 
 from astro_project.core.photometry import detect_sources
-from astro_project.pipeline.kinematics import kinematic_shift_and_stack
+from astro_project.pipeline.kinematics import single_pass_wcs_kinematic_stack
 
 
 def _build_gaussian_psf_kernel(
@@ -76,6 +76,7 @@ def _shift_frames_along_trajectory(
     times_hours: torch.Tensor,
     vx: float,
     vy: float,
+    wcs_offsets_xy: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """
     Shifts a [N, Y, X] tensor back to t_0 along velocity (vx, vy) using
@@ -88,22 +89,21 @@ def _shift_frames_along_trajectory(
     t = times_hours.to(device=device, dtype=dtype)
     dt = t - t[0]
 
-    dx = vx * dt
-    dy = vy * dt
+    dx_shift = -vx * dt
+    dy_shift = -vy * dt
+    if wcs_offsets_xy is not None:
+        offsets = wcs_offsets_xy.to(device=device, dtype=dtype)
+        dx_shift = dx_shift + offsets[:, 0]
+        dy_shift = dy_shift + offsets[:, 1]
 
-    tx = 2.0 * dx / float(width)
-    ty = 2.0 * dy / float(height)
+    tx = -2.0 * dx_shift / float(width)
+    ty = -2.0 * dy_shift / float(height)
 
-    zeros = torch.zeros_like(tx)
-    ones = torch.ones_like(tx)
-
-    theta = torch.stack(
-        [
-            torch.stack([ones, zeros, tx], dim=-1),
-            torch.stack([zeros, ones, ty], dim=-1),
-        ],
-        dim=1,
-    )
+    theta = torch.zeros((n_frames, 2, 3), dtype=dtype, device=device)
+    theta[:, 0, 0] = 1.0
+    theta[:, 1, 1] = 1.0
+    theta[:, 0, 2] = tx
+    theta[:, 1, 2] = ty
 
     frames_4d = frames.unsqueeze(1)
     grid = F.affine_grid(theta, size=frames_4d.shape, align_corners=False)
@@ -124,14 +124,15 @@ def trimmed_likelihood_stack(
     vx: float,
     vy: float,
     trim_fraction: float = 0.2,
+    wcs_offsets_xy: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """
     Shifts pre-convolved Psi and Phi stacks along (vx, vy) and computes the
     trimmed-likelihood SNR map: sum(Psi) / sqrt(sum(Phi)), rejecting outlier frames.
     """
     with torch.no_grad():
-        shifted_psi = _shift_frames_along_trajectory(psi, times_hours, vx=vx, vy=vy)
-        shifted_phi = _shift_frames_along_trajectory(phi, times_hours, vx=vx, vy=vy)
+        shifted_psi = _shift_frames_along_trajectory(psi, times_hours, vx=vx, vy=vy, wcs_offsets_xy=wcs_offsets_xy)
+        shifted_phi = _shift_frames_along_trajectory(phi, times_hours, vx=vx, vy=vy, wcs_offsets_xy=wcs_offsets_xy)
 
         n_frames = shifted_psi.shape[0]
         k_trim = int(math.floor(n_frames * trim_fraction)) if trim_fraction > 0.0 else 0
@@ -162,6 +163,7 @@ def run_velocity_search(
     fwhm: float = 3.0,
     use_psi_phi: bool = False,
     trim_fraction: float = 0.2,
+    wcs_offsets_xy: torch.Tensor | None = None,
 ) -> list[dict]:
     """
     Executes a GPU-accelerated velocity grid search (Shift-and-Stack or Psi/Phi
@@ -190,13 +192,15 @@ def run_velocity_search(
                         vx=vx,
                         vy=vy,
                         trim_fraction=trim_fraction,
+                        wcs_offsets_xy=wcs_offsets_xy,
                     )
                 else:
-                    stacked = kinematic_shift_and_stack(
+                    stacked = single_pass_wcs_kinematic_stack(
                         frames=frames,
                         times_hours=times_hours,
                         vx=vx,
                         vy=vy,
+                        wcs_offsets_xy=wcs_offsets_xy,
                         method="median",
                     )
                 with warnings.catch_warnings():

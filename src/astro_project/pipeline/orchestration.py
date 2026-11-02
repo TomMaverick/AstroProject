@@ -6,14 +6,10 @@ from astropy.table import Table
 from astro_project.core.classifier import extract_multichannel_stamps, extract_stamps
 from astro_project.core.fits_loader import load_fits_image
 from astro_project.core.photometry import estimate_background
-from astro_project.core.wcs_utils import sources_to_skycoords
+from astro_project.core.wcs_utils import sources_to_skycoords, compute_wcs_frame_offsets
 from astro_project.pipeline.kinematics import (
-    kinematic_shift_and_stack,
+    single_pass_wcs_kinematic_stack,
     mask_stationary_stars,
-)
-from astro_project.pipeline.velocity_search import (
-    _shift_frames_along_trajectory,
-    run_velocity_search,
 )
 
 
@@ -50,6 +46,7 @@ def run_pipeline(
     cleaned_frames = []
     reference_wcs = None
     header_times = []
+    wcs_list = []
 
     # a) & b) FITS-Bilder laden, Hintergrund abziehen und Feldsterne maskieren
     for idx, path in enumerate(file_paths):
@@ -65,6 +62,7 @@ def run_pipeline(
             bg_subtracted, threshold=star_mask_threshold, fwhm=fwhm
         )
         cleaned_frames.append(masked)
+        wcs_list.append(wcs)
 
     frames = torch.stack(cleaned_frames, dim=0)  # [N, Y, X]
 
@@ -75,6 +73,9 @@ def run_pipeline(
             raise ValueError("times_hours must be provided if MJD-OBS is absent from FITS headers")
     else:
         times_tensor = times_hours.to(device=device, dtype=torch.float32)
+
+    # Compute WCS frame offsets
+    wcs_offsets = compute_wcs_frame_offsets(wcs_list, reference_wcs, height=frames.shape[1], width=frames.shape[2], device=device)
 
     # c) GPU Velocity Grid Search
     raw_candidates = run_velocity_search(
@@ -87,6 +88,7 @@ def run_pipeline(
         fwhm=fwhm,
         use_psi_phi=use_psi_phi,
         trim_fraction=0.2,
+        wcs_offsets_xy=wcs_offsets,
     )
 
     colnames = ("x_centroid", "y_centroid", "ra", "dec", "vx", "vy", "flux", "peak", "cnn_score")
@@ -107,11 +109,12 @@ def run_pipeline(
         for cand in raw_candidates:
             vel_key = (cand["vx"], cand["vy"])
             if vel_key not in stack_cache:
-                shifted = _shift_frames_along_trajectory(
+                shifted = single_pass_wcs_kinematic_stack(
                     frames=frames,
                     times_hours=times_tensor,
                     vx=cand["vx"],
                     vy=cand["vy"],
+                    wcs_offsets_xy=wcs_offsets,
                 )
                 mean_img = torch.mean(shifted, dim=0)
                 median_img = torch.median(shifted, dim=0).values

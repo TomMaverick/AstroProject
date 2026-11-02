@@ -2,6 +2,7 @@ import numpy as np
 from astropy.wcs import WCS
 import astropy.units as u
 from astropy.coordinates import SkyCoord
+import torch
 
 
 def get_wcs(header) -> WCS:
@@ -42,3 +43,39 @@ def sources_to_skycoords(sources, wcs: WCS) -> SkyCoord:
     y_coords = np.asarray(sources["y_centroid"], dtype=np.float64)
     ra, dec = pix_to_world(wcs, x_coords, y_coords)
     return SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame="icrs")
+
+
+def compute_wcs_frame_offsets(
+    wcs_list: list[WCS],
+    reference_wcs: WCS,
+    height: int,
+    width: int,
+    device: torch.device | str = "cpu",
+) -> torch.Tensor:
+    """
+    Berechnet für jedes WCS in `wcs_list` den translatorischen Pixel-Versatz (dx_wcs, dy_wcs)
+    relativ zu `reference_wcs` am Bildzentrum mit `origin=0` als Tensor [N, 2].
+    """
+    xc = float(width) / 2.0
+    yc = float(height) / 2.0
+
+    offsets = []
+    for wcs_i in wcs_list:
+        if (
+            wcs_i is None
+            or reference_wcs is None
+            or not wcs_i.is_celestial
+            or not reference_wcs.is_celestial
+        ):
+            offsets.append((0.0, 0.0))
+            continue
+        ra_c, dec_c = pix_to_world(wcs_i, xc, yc)
+        x_ref, y_ref = world_to_pix(reference_wcs, ra_c, dec_c)
+        dx_wcs = float(np.asarray(x_ref).item()) - xc
+        dy_wcs = float(np.asarray(y_ref).item()) - yc
+        if not (np.isfinite(dx_wcs) and np.isfinite(dy_wcs)):
+            offsets.append((0.0, 0.0))
+        else:
+            offsets.append((dx_wcs, dy_wcs))
+
+    return torch.tensor(offsets, dtype=torch.float32, device=device)

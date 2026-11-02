@@ -49,17 +49,18 @@ def mask_stationary_stars(
         raise ValueError(f"Expected 2D [Y, X] or 3D [N, Y, X] tensor, got shape {frames.shape}")
 
 
-def kinematic_shift_and_stack(
+def single_pass_wcs_kinematic_stack(
     frames: torch.Tensor,
     times_hours: torch.Tensor,
     vx: float,
     vy: float,
+    wcs_offsets_xy: torch.Tensor | None = None,
     method: str = "median",
 ) -> torch.Tensor:
     """
-    Verschiebt einen [N, Y, X] Tensor anhand des Zeitvektors `times_hours` und der
-    Geschwindigkeit (vx, vy) mittels affine_grid/grid_sample (align_corners=False)
-    zurück auf die Position zur Zeit t[0] und stackt die Frames.
+    Kombiniert den translatorischen WCS-Drift-Versatz `wcs_offsets_xy` ([N, 2]) und
+    die kinematische Rückverschiebung (-vx * dt, -vy * dt) in einem einzigen
+    flusserhaltenden F.affine_grid / F.grid_sample (align_corners=False) Aufruf.
     """
     if frames.ndim != 3:
         raise ValueError(f"Expected 3D [N, Y, X] tensor, got shape {frames.shape}")
@@ -73,13 +74,18 @@ def kinematic_shift_and_stack(
         raise ValueError(f"Expected 1D times_hours of length {n_frames}, got shape {t.shape}")
 
     dt = t - t[0]
-    # Individuelle Rückverschiebung pro Frame i: dx = -vx * (t[i] - t[0]), dy = -vy * (t[i] - t[0])
     dx = -vx * dt
     dy = -vy * dt
 
-    # In F.affine_grid bildet theta Zielkoordinaten auf Quellkoordinaten ab:
-    # x_src = x_dst + tx. Um das Bild um (dx, dy) zu verschieben, muss bei (x_dst - dx, y_dst - dy)
-    # abgetastet werden (mit align_corners=False gilt 1 Pixel = 2.0 / Ausdehnung).
+    if wcs_offsets_xy is not None:
+        offsets = wcs_offsets_xy.to(device=device, dtype=dtype)
+        if offsets.shape != (n_frames, 2):
+            raise ValueError(
+                f"Expected wcs_offsets_xy of shape ({n_frames}, 2), got {offsets.shape}"
+            )
+        dx = dx + offsets[:, 0]
+        dy = dy + offsets[:, 1]
+
     tx = -2.0 * dx / float(width)
     ty = -2.0 * dy / float(height)
 
@@ -108,3 +114,25 @@ def kinematic_shift_and_stack(
         return torch.sum(shifted, dim=0)
     else:
         raise ValueError(f"Unknown stacking method: {method}")
+
+
+def kinematic_shift_and_stack(
+    frames: torch.Tensor,
+    times_hours: torch.Tensor,
+    vx: float,
+    vy: float,
+    method: str = "median",
+) -> torch.Tensor:
+    """
+    Verschiebt einen [N, Y, X] Tensor anhand des Zeitvektors `times_hours` und der
+    Geschwindigkeit (vx, vy) mittels affine_grid/grid_sample (align_corners=False)
+    zurück auf die Position zur Zeit t[0] und stackt die Frames.
+    """
+    return single_pass_wcs_kinematic_stack(
+        frames=frames,
+        times_hours=times_hours,
+        vx=vx,
+        vy=vy,
+        wcs_offsets_xy=None,
+        method=method,
+    )
