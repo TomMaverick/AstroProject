@@ -1,8 +1,8 @@
 # AstroProject — Master-Roadmap (Deep Sub-Sigma Discovery & Stellarium Control)
 
 ## Meilenstein 9: UI/UX 1cm Top-Statusbar & Live-Zeitreihen-Simulator (`gui/app.py`)
-- [ ] **1cm Fixed Top-Statusbar:** Einzeilige, flache Statusleiste am oberen Bildschirmrand (CPU %, RAM %, GPU-Name, VRAM GB, Device) ohne verschenkten Platz über dem Haupttitel.
-- [ ] **Synthetischer Low-SNR Zeitreihen-Generator:** Button in Tab 2 zum Erzeugen einer 5-Frame-FITS-Serie mit statischen Feldsternen und einem im Einzelbild fast unsichtbaren Asteroiden (`SNR ~ 1.0 - 1.5` im Einzelbild) inkl. Vorher/Nachher-Plot.
+- [x] **1cm Fixed Top-Statusbar:** Einzeilige, flache Statusleiste am oberen Bildschirmrand (CPU %, RAM %, GPU-Name, VRAM GB, Device) ohne verschenkten Platz über dem Haupttitel.
+- [x] **Synthetischer Low-SNR Zeitreihen-Generator:** Button in Tab 2 zum Erzeugen einer 5-Frame-FITS-Serie mit statischen Feldsternen und einem im Einzelbild fast unsichtbaren Asteroiden (`SNR ~ 1.0 - 1.5` im Einzelbild) inkl. Vorher/Nachher-Plot.
 
 ## Meilenstein 10: KBMOD Psi/Phi Sub-Sigma GPU-Engine & 3-Kanal RealBogusCNN (`velocity_search.py`, `classifier.py`)
 - [ ] **Pre-Shift PSF Matched-Filtering (Psi/Phi-Methode):** Einmalige Faltung der Einzelbilder mit der PSF auf der GPU *vor* der Geschwindigkeitsschleife zur Maximierung des SNR schwacher Punktquellen.
