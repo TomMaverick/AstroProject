@@ -22,6 +22,7 @@ from astro_project.core.fits_loader import load_fits_image
 from astro_project.core.photometry import detect_sources, estimate_background
 from astro_project.core.synthetic import generate_demo_asteroid_series, generate_synthetic_sky
 from astro_project.core.wcs_utils import sources_to_skycoords
+from astro_project.core.hardware import resolve_device
 from astro_project.pipeline.kinematics import (
     kinematic_shift_and_stack,
     mask_stationary_stars,
@@ -174,7 +175,7 @@ def render_sidebar_controls() -> torch.device:
                     torch.cuda.empty_cache()
                 st.rerun()
 
-        return torch.device(
+        return resolve_device(
             selected_dev if selected_dev == "cuda" and cuda_available else "cpu"
         )
 

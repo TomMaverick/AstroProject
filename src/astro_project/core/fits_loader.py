@@ -2,6 +2,8 @@ import numpy as np
 import torch
 from astropy.io import fits
 from astropy.wcs import WCS
+from pathlib import Path
+from typing import Union
 
 
 def _select_image_hdu(hdul, hdu_index: int | None = None):
@@ -65,16 +67,14 @@ def load_fits(file_path, hdu_index: int | None = None):
 
 def save_fits_image(
     tensor: torch.Tensor,
-    header: fits.Header,
-    file_path: str,
-    hdu_index: int | None = None,
-):
-    """Speichert ein [Y, X] PyTorch-Tensor als FITS-Bild mit dem angegebenen Header."""
-    data_np = tensor.cpu().numpy()
-    hdu = fits.PrimaryHDU(data=data_np, header=header)
-    if hdu_index is not None:
-        hdul = fits.HDUList([fits.PrimaryHDU(), hdu])
-        hdul[hdu_index + 1] = hdu
-    else:
-        hdul = fits.HDUList([hdu])
-    hdul.writeto(file_path, overwrite=True)
+    file_path: Union[str, Path],
+    wcs: WCS | None = None,
+    header: fits.Header | None = None,
+) -> None:
+    """Saves a 2D [Y, X] PyTorch tensor mock-free as a FITS file with optional WCS/header."""
+    data_np = tensor.detach().cpu().numpy().astype(np.float32)
+    out_header = header.copy() if header is not None else fits.Header()
+    if wcs is not None:
+        out_header.update(wcs.to_header())
+    out_header["CREATOR"] = "AstroProject Pipeline"
+    fits.writeto(str(file_path), data_np, header=out_header, overwrite=True)
