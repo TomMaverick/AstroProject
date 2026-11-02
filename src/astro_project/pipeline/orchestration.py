@@ -11,6 +11,7 @@ from astro_project.pipeline.kinematics import (
     single_pass_wcs_kinematic_stack,
     mask_stationary_stars,
 )
+from astro_project.pipeline.velocity_search import run_velocity_search  # Import run_velocity_search
 
 
 def run_pipeline(
