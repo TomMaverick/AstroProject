@@ -5,26 +5,8 @@ import torch
 from astropy.io import fits
 
 from astro_project.core.fits_loader import save_fits_image
+from astro_project.core.hardware import resolve_device
 from astro_project.core.wcs_utils import create_synthetic_wcs, pix_to_world
-
-
-def generate_synthetic_sky(
-    n_frames: int, height: int, width: int, x0: float, y0: float, 
-    vx: float, vy: float, flux: float, sigma: float, noise_std: float = 0.0, 
-    device: Union[str, torch.device] = "cpu"
-) -> torch.Tensor:
-    device = torch.device(device)
-    y_coords = torch.arange(height, dtype=torch.float32, device=device)
-    x_coords = torch.arange(width, dtype=torch.float32, device=device)
-    grid_y, grid_x = torch.meshgrid(y_coords, x_coords, indexing="ij")
-    grid_y, grid_x = grid_y.unsqueeze(0), grid_x.unsqueeze(0)
-    t = torch.arange(n_frames, dtype=torch.float32, device=device).view(-1, 1, 1)
-    x_t, y_t = x0 + vx * t, y0 + vy * t
-    norm_factor = flux / (2.0 * math.pi * (sigma**2))
-    frames = norm_factor * torch.exp(-((grid_x - x_t)**2 + (grid_y - y_t)**2) / (2.0 * sigma**2))
-    if noise_std > 0.0:
-        frames += torch.randn_like(frames) * noise_std
-    return frames
 
 
 def generate_demo_asteroid_series(
@@ -35,20 +17,61 @@ def generate_demo_asteroid_series(
     vx: float = 2.0,
     vy: float = -1.0,
     asteroid_snr: float = 1.5,
+    n_stars: int = 5,
+    randomize: bool = False,
+    seed: int | None = None,
     device: Union[str, torch.device] = "cpu",
 ) -> tuple[list[str], list[float], dict]:
     """
-    Erzeugt eine Serie von `n_frames` synthetischen FITS-Bildern ([Y, X] Konvention)
-    mit Hintergrundrauschen, 5 hellen statischen Feldsternen und 1 lichtschwachen,
-    sich linear bewegenden Asteroiden. Speichert valide FITS-Dateien mit WCS und
-    aufsteigendem `MJD-OBS` Header.
+    Generates a series of `n_frames` synthetic FITS images ([Y, X] convention)
+    with background noise, `n_stars` bright static field stars, and 1 faint,
+    linearly moving asteroid. Saves valid FITS files with WCS and ascending
+    `MJD-OBS` headers.
     """
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    device = torch.device(device)
+    device = resolve_device(device)
+
+    # Clean up any leftover series_frame_*.fits from previous runs with more frames
+    for old_fits in out_dir.glob("series_frame_*.fits"):
+        try:
+            old_fits.unlink()
+        except OSError:
+            pass
+
+    cpu_gen = torch.Generator(device="cpu")
+    if seed is not None:
+        cpu_gen.manual_seed(int(seed))
+    elif not randomize:
+        cpu_gen.manual_seed(42)
+    else:
+        cpu_gen.seed()
 
     gen = torch.Generator(device=device)
-    gen.manual_seed(42)
+    gen.manual_seed(int(torch.randint(0, 2**31 - 1, (1,), generator=cpu_gen).item()))
+
+    if randomize:
+        n_frames = int(torch.randint(3, 16, (1,), generator=cpu_gen).item())
+        vx = float((torch.rand((1,), generator=cpu_gen).item() * 6.0) - 3.0)
+        vy = float((torch.rand((1,), generator=cpu_gen).item() * 6.0) - 3.0)
+        if abs(vx) < 0.4 and abs(vy) < 0.4:
+            vx = 1.5
+        asteroid_snr = float(1.0 + torch.rand((1,), generator=cpu_gen).item() * 4.0)
+        margin_x = max(24.0, abs(vx) * n_frames + 16.0)
+        margin_y = max(24.0, abs(vy) * n_frames + 16.0)
+        low_x = min(margin_x, width * 0.35)
+        high_x = max(width - margin_x, width * 0.65)
+        low_y = min(margin_y, height * 0.35)
+        high_y = max(height - margin_y, height * 0.65)
+        x0 = float(low_x + torch.rand((1,), generator=cpu_gen).item() * (high_x - low_x))
+        y0 = float(low_y + torch.rand((1,), generator=cpu_gen).item() * (high_y - low_y))
+    else:
+        n_frames = int(n_frames)
+        vx = float(vx)
+        vy = float(vy)
+        asteroid_snr = float(asteroid_snr)
+        x0 = float(width) * 0.52
+        y0 = float(height) * 0.55
 
     wcs = create_synthetic_wcs(pixel_scale_arcsec=1.0, crval_ra=180.0, crval_dec=45.0)
 
@@ -61,21 +84,35 @@ def generate_demo_asteroid_series(
     bg_level = 100.0
     noise_std = 2.0
 
-    # Integrierter PSF-Skalierungsfaktor (~8.0 ADU pro SNR-Einheit bei noise_std=2.0),
-    # sodass der Asteroid im Einzelbild im Rauschen bleibt, aber im 5-Frame-Stack klar hervortritt.
-    asteroid_amp = max(float(asteroid_snr) * noise_std * 5.0, 10.0)
+    asteroid_amp = max(float(asteroid_snr) * noise_std * 5.0, 6.0)
 
-    # 5 feste statische Feldsterne als (y, x, amplitude) Tupel in [Y, X] Konvention
-    stars = [
+    default_stars = [
         (22.0, 26.0, 1200.0),
         (30.0, 98.0, 1450.0),
         (60.0, 32.0, 1100.0),
         (96.0, 42.0, 1350.0),
         (102.0, 100.0, 1600.0),
+        (18.0, 64.0, 1250.0),
+        (48.0, 82.0, 1300.0),
+        (75.0, 18.0, 1150.0),
+        (84.0, 108.0, 1500.0),
+        (110.0, 60.0, 1400.0),
     ]
 
-    x0 = float(width) * 0.52
-    y0 = float(height) * 0.55
+    n_stars = max(0, int(n_stars))
+    if not randomize and n_stars <= len(default_stars):
+        stars = default_stars[:n_stars]
+    else:
+        stars = []
+        for idx in range(n_stars):
+            if not randomize and idx < len(default_stars):
+                stars.append(default_stars[idx])
+            else:
+                sy = float(12.0 + torch.rand((1,), generator=cpu_gen).item() * max(1.0, height - 24.0))
+                sx = float(12.0 + torch.rand((1,), generator=cpu_gen).item() * max(1.0, width - 24.0))
+                samp = float(1000.0 + torch.rand((1,), generator=cpu_gen).item() * 700.0)
+                stars.append((sy, sx, samp))
+
     ra0, dec0 = pix_to_world(wcs, x0, y0)
 
     base_mjd = 60000.0
@@ -92,13 +129,11 @@ def generate_demo_asteroid_series(
             ) * noise_std
             frame = torch.full((height, width), bg_level, dtype=torch.float32, device=device) + noise
 
-            # Statische Feldsterne addieren
             for sy, sx, samp in stars:
                 frame += samp * torch.exp(
                     -((grid_y - sy) ** 2 + (grid_x - sx) ** 2) / (2.0 * sigma**2)
                 )
 
-            # Bewegter Asteroid zur Zeit t_hr
             xi = x0 + vx * t_hr
             yi = y0 + vy * t_hr
             frame += asteroid_amp * torch.exp(
@@ -108,7 +143,6 @@ def generate_demo_asteroid_series(
             fits_path = out_dir / f"series_frame_{i:02d}.fits"
             save_fits_image(frame, str(fits_path), wcs=wcs)
 
-            # MJD-OBS und EXPTIME in den FITS-Header schreiben
             mjd_obs = base_mjd + (t_hr / 24.0)
             with fits.open(str(fits_path), mode="update", memmap=False) as hdul:
                 hdul[0].header["MJD-OBS"] = (mjd_obs, "Modified Julian Date of observation")
@@ -118,6 +152,7 @@ def generate_demo_asteroid_series(
             file_paths.append(str(fits_path))
 
     ground_truth = {
+        "n_frames": int(n_frames),
         "x0": x0,
         "y0": y0,
         "ra0": float(ra0),
@@ -127,6 +162,37 @@ def generate_demo_asteroid_series(
         "asteroid_snr": float(asteroid_snr),
         "asteroid_amp": asteroid_amp,
         "noise_std": noise_std,
+        "n_stars": len(stars),
         "stars": stars,
+        "randomized": bool(randomize),
     }
     return file_paths, times_hours, ground_truth
+
+
+def generate_custom_asteroid_series(
+    output_dir: Union[str, Path],
+    n_frames: int = 5,
+    height: int = 128,
+    width: int = 128,
+    vx: float = 2.0,
+    vy: float = -1.0,
+    asteroid_snr: float = 1.5,
+    n_stars: int = 5,
+    randomize: bool = False,
+    seed: int | None = None,
+    device: Union[str, torch.device] = "cpu",
+) -> tuple[list[str], list[float], dict]:
+    """Wrapper for custom/randomized synthetic asteroid series generation."""
+    return generate_demo_asteroid_series(
+        output_dir=output_dir,
+        n_frames=n_frames,
+        height=height,
+        width=width,
+        vx=vx,
+        vy=vy,
+        asteroid_snr=asteroid_snr,
+        n_stars=n_stars,
+        randomize=randomize,
+        seed=seed,
+        device=device,
+    )

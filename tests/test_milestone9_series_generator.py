@@ -87,3 +87,57 @@ def test_generate_demo_asteroid_series_and_pipeline_detection(tmp_path, device):
     true_coord = SkyCoord(ra=gt["ra0"] * u.deg, dec=gt["dec0"] * u.deg, frame="icrs")
     det_coord = SkyCoord(ra=best["ra"] * u.deg, dec=best["dec"] * u.deg, frame="icrs")
     assert true_coord.separation(det_coord).arcsecond < 1.0
+
+
+def test_generate_custom_and_randomized_asteroid_series(tmp_path, device):
+    custom_dir = tmp_path / "custom_series"
+
+    # 1. Custom deterministic parameters
+    paths_custom, times_custom, gt_custom = generate_demo_asteroid_series(
+        output_dir=custom_dir,
+        n_frames=4,
+        height=128,
+        width=128,
+        vx=-1.5,
+        vy=1.25,
+        asteroid_snr=2.5,
+        n_stars=3,
+        randomize=False,
+        device=device,
+    )
+
+    assert len(paths_custom) == 4
+    assert len(times_custom) == 4
+    assert gt_custom["n_frames"] == 4
+    assert gt_custom["vx"] == pytest.approx(-1.5)
+    assert gt_custom["vy"] == pytest.approx(1.25)
+    assert gt_custom["asteroid_snr"] == pytest.approx(2.5)
+    assert len(gt_custom["stars"]) == 3
+
+    for p in paths_custom:
+        img_t, wcs, hdr = load_fits_image(p, device=device)
+        assert img_t.shape == (128, 128)
+        assert wcs.is_celestial is True
+        assert "MJD-OBS" in hdr
+
+    # 2. Randomize mode into the same directory (verifies old extra frames are cleaned up)
+    paths_rand, times_rand, gt_rand = generate_demo_asteroid_series(
+        output_dir=custom_dir,
+        height=128,
+        width=128,
+        n_stars=7,
+        randomize=True,
+        seed=123,
+        device=device,
+    )
+
+    assert 3 <= len(paths_rand) <= 15
+    assert len(paths_rand) == gt_rand["n_frames"]
+    assert len(list(custom_dir.glob("*.fits"))) == len(paths_rand)
+    assert len(times_rand) == len(paths_rand)
+    assert -5.0 <= gt_rand["vx"] <= 5.0
+    assert -5.0 <= gt_rand["vy"] <= 5.0
+    assert 1.0 <= gt_rand["asteroid_snr"] <= 5.0
+    assert 20.0 <= gt_rand["x0"] <= 108.0
+    assert 20.0 <= gt_rand["y0"] <= 108.0
+    assert len(gt_rand["stars"]) == 7

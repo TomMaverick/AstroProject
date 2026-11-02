@@ -635,29 +635,108 @@ def render_tab_pipeline_grid_search(device: torch.device):
                         vx=2.0,
                         vy=-1.0,
                         asteroid_snr=1.5,
+                        n_stars=5,
+                        randomize=False,
                         device=device,
                     )
                     st.session_state["demo_gt"] = gt
+                    st.session_state.pop("pipeline_result", None)
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 st.success(
-                    f"5-Frame FITS-Serie erfolgreich in `data/series_demo` erzeugt (Ground-Truth: vx={gt['vx']} px/h, vy={gt['vy']} px/h, Start=({gt['x0']:.1f}, {gt['y0']:.1f}))."
+                    f"5-Frame FITS-Serie erfolgreich in `data/series_demo` erzeugt (Ground-Truth: vx={gt['vx']:.2f} px/h, vy={gt['vy']:.2f} px/h, SNR={gt['asteroid_snr']:.2f}, Start=({gt['x0']:.1f}, {gt['y0']:.1f}))."
                 )
             except Exception as exc:
                 st.error(f"Fehler beim Erzeugen der 5-Frame-Serie: {exc}")
 
-    active_dir = Path(selected_folder)
-    fits_files = sorted(
-        [
-            str(p)
-            for p in active_dir.iterdir()
-            if p.is_file() and p.suffix.lower() in (".fits", ".fit", ".fts")
-        ]
-    )
+    with st.expander("⚙️ Erweiterte Parameter für synthetische Serie", expanded=False):
+        randomize_series = st.checkbox(
+            "🎲 Parameter zufällig generieren (Randomize)",
+            value=False,
+            help="Zieht Anzahl Frames (3–15), Geschwindigkeiten vx/vy, Asteroiden-SNR und Startposition (x0, y0) zufällig.",
+        )
+        if not randomize_series:
+            cfg_c1, cfg_c2, cfg_c3 = st.columns(3)
+            with cfg_c1:
+                custom_n_frames = st.slider(
+                    "Anzahl Frames",
+                    min_value=3,
+                    max_value=15,
+                    value=5,
+                    step=1,
+                    help="Anzahl der zeitlich aufeinanderfolgenden FITS-Aufnahmen in data/series_demo/.",
+                )
+                custom_n_stars = st.slider(
+                    "Anzahl Feldsterne",
+                    min_value=0,
+                    max_value=10,
+                    value=5,
+                    step=1,
+                    help="Anzahl der hellen stationären Hintergrundsterne im Bildfeld.",
+                )
+            with cfg_c2:
+                custom_vx = st.slider(
+                    "Geschwindigkeit vx [px/h]",
+                    min_value=-5.0,
+                    max_value=5.0,
+                    value=2.0,
+                    step=0.25,
+                    help="Wahre horizontale Eigenbewegung des synthetischen Asteroiden in Pixeln pro Stunde.",
+                )
+                custom_vy = st.slider(
+                    "Geschwindigkeit vy [px/h]",
+                    min_value=-5.0,
+                    max_value=5.0,
+                    value=-1.0,
+                    step=0.25,
+                    help="Wahre vertikale Eigenbewegung des synthetischen Asteroiden in Pixeln pro Stunde.",
+                )
+            with cfg_c3:
+                custom_snr = st.slider(
+                    "Asteroiden-SNR (Einzelbild)",
+                    min_value=0.8,
+                    max_value=5.0,
+                    value=1.5,
+                    step=0.1,
+                    help="Signal-zu-Rausch-Verhältnis des Asteroiden pro Einzelaufnahme.",
+                )
+        else:
+            st.caption(
+                "Im Zufalls-Modus werden `n_frames` (3–15), `vx` & `vy` (-3 bis +3 px/h), `asteroid_snr` (1.0–5.0) und `(x0, y0)` automatisch ausgewürfelt."
+            )
+            custom_n_frames = 5
+            custom_vx = 2.0
+            custom_vy = -1.0
+            custom_snr = 1.5
+            custom_n_stars = 5
 
-    st.caption(
-        f"Aktiver Ordner `{selected_folder}`: **{len(fits_files)} FITS-Datei(en)** gefunden | Compute-Device: **{device}**"
-    )
+        if st.button("🚀 Serie mit diesen Parametern generieren", width="stretch"):
+            try:
+                with torch.no_grad():
+                    paths, times, gt = generate_demo_asteroid_series(
+                        output_dir="data/series_demo",
+                        n_frames=int(custom_n_frames),
+                        height=128,
+                        width=128,
+                        vx=float(custom_vx),
+                        vy=float(custom_vy),
+                        asteroid_snr=float(custom_snr),
+                        n_stars=int(custom_n_stars),
+                        randomize=bool(randomize_series),
+                        device=device,
+                    )
+                    st.session_state["demo_gt"] = gt
+                    st.session_state.pop("pipeline_result", None)
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                st.success(
+                    f"{gt['n_frames']}-Frame FITS-Serie in `data/series_demo` generiert "
+                    f"(Ground-Truth: vx={gt['vx']:.2f} px/h, vy={gt['vy']:.2f} px/h, "
+                    f"SNR={gt['asteroid_snr']:.2f}, Sterne={gt['n_stars']}, "
+                    f"Start=({gt['x0']:.1f}, {gt['y0']:.1f}))."
+                )
+            except Exception as exc:
+                st.error(f"Fehler beim Generieren der benutzerdefinierten Serie: {exc}")
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -759,262 +838,79 @@ def render_tab_pipeline_grid_search(device: torch.device):
                         target_xy = None
 
                     shifted_stack_t = kinematic_shift_and_stack(
-                        frames=frames_stack_t,
-                        times_hours=times_hours,
+                        frames_stack_t,
                         vx=best_vx,
                         vy=best_vy,
-                        method="median",
+                        times_hours=times_hours,
+                        device=device,
                     )
-                    stacked_np = shifted_stack_t.detach().cpu().numpy()
 
-            st.success(
-                f"Pipeline abgeschlossen: **{len(catalog)} Kandidat(en)** nach Sternmaskierung, Shift-and-Stack und RealBogusCNN-Filterung gefunden."
-            )
-
-            res = {
-                "raw_frames_np": raw_frames_np,
-                "cleaned_frames_np": cleaned_frames_np,
-                "mjd_epochs": mjd_days_list,
-                "times_hours_list": times_hours.detach().cpu().tolist(),
-                "wcs_ref": wcs_obj if wcs_obj is not None else create_synthetic_wcs(),
-                "stacked_np": stacked_np,
-                "catalog_df": catalog.to_pandas(),
-                "best_vx": best_vx,
-                "best_vy": best_vy,
-                "best_candidate": {
-                    "x0": float(catalog[0]["x_centroid"]) if len(catalog) > 0 else 0.0,
-                    "y0": float(catalog[0]["y_centroid"]) if len(catalog) > 0 else 0.0,
-                    "vx": best_vx,
-                    "vy": best_vy,
-                    "ra": float(catalog[0]["ra"]) if len(catalog) > 0 else 0.0,
-                    "dec": float(catalog[0]["dec"]) if len(catalog) > 0 else 0.0,
-                    "peak": float(catalog[0]["peak"]) if len(catalog) > 0 else 0.0,
-                    "cnn_score": float(catalog[0]["cnn_score"]) if len(catalog) > 0 else 0.0,
-                    "height": frame0_np.shape[0],
-                    "width": frame0_np.shape[1],
-                    "base_mjd": mjd_days_list[0],
-                },
-                "target_xy": target_xy,
-            }
-            st.session_state["pipeline_result"] = res
-
-        except Exception as exc:
-            st.error(f"Fehler während der Pipeline-Ausführung: {exc}")
-        finally:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-    res = st.session_state.get("pipeline_result")
-    if res is not None:
-        n_total = len(res["raw_frames_np"])
-        nav_c1, nav_c2, nav_c3 = st.columns([2, 2, 2])
-        with nav_c1:
-            frame_idx = st.slider(
-                "🎞️ Original-Frame durchschalten (Frame i)",
-                min_value=0,
-                max_value=max(0, n_total - 1),
-                value=0,
-                step=1,
-                help="Schaltet interaktiv durch die einzelnen Beobachtungsepochen (Frame 0 bis N-1) der FITS-Serie.",
-            )
-        with nav_c2:
-            view_mode = st.radio(
-                "Ansicht Links",
-                options=["Rohbild (mit Feldsternen)", "Bereinigt (Feldsterne maskiert)"],
-                horizontal=True,
-                help="Wechselt zwischen dem unbereinigten Original-Frame und dem Hintergrund-abgezogenen Frame nach Maskierung stationärer Feldsterne.",
-            )
-        with nav_c3:
-            t_h = res["times_hours_list"][frame_idx]
-            mjd_i = res["mjd_epochs"][frame_idx]
-            st.caption(f"⏱️ **Epoche Frame {frame_idx}:** `t = +{t_h:.2f} h` | `MJD = {mjd_i:.5f}`")
-            show_trail = st.checkbox(
-                "Asteroiden-Spur im Einzelbild markieren",
-                value=True,
-                help="Markiert die berechnete Position (x0 + vx·dt, y0 + vy·dt) des besten Kandidaten zum Zeitpunkt des gewählten Einzelbildes.",
-            )
+            st.success("Pipeline erfolgreich ausgeführt.")
 
-        if show_trail and res["target_xy"] is not None:
-            dt_i = res["times_hours_list"][frame_idx] - res["times_hours_list"][0]
-            frame_marker_xy = (res["target_xy"][0] + res["best_vx"] * dt_i, res["target_xy"][1] + res["best_vy"] * dt_i)
-        else:
-            frame_marker_xy = None
+            # Display results
+            if len(catalog) > 0:
+                st.markdown("#### 📋 Erkannte Kandidaten")
+                st.dataframe(catalog.to_pandas(), width="stretch", height=280)
 
-        left_np = res["raw_frames_np"][frame_idx] if view_mode.startswith("Rohbild") else res["cleaned_frames_np"][frame_idx]
+                # Display best candidate
+                best_candidate = catalog[0]
+                st.markdown(f"### 🌌 Bester Kandidat: vx={best_vx:.2f} px/h, vy={best_vy:.2f} px/h")
 
-        col_plot1, col_plot2 = st.columns(2)
-        with col_plot1:
-            fig_left = _plot_comparison_frame(
-                left_np,
-                f"Frame {frame_idx} (t={t_h:.2f}h)",
-                target_xy=frame_marker_xy,
-                scale_pct=st.session_state.get("plot_scale_pct", 85.0),
-            )
-            st.pyplot(fig_left, width="stretch")
-            plt.close(fig_left)
-        with col_plot2:
-            fig_stack = _plot_comparison_frame(
-                res["stacked_np"],
-                f"Shift-and-Stack Summenbild (vx={res['best_vx']:.2f}, vy={res['best_vy']:.2f} px/h)",
-                target_xy=res["target_xy"],
-                scale_pct=st.session_state.get("plot_scale_pct", 85.0),
-            )
-            st.pyplot(fig_stack, width="stretch")
-            plt.close(fig_stack)
-
-        if len(res["catalog_df"]) > 0:
-            st.dataframe(res["catalog_df"], width="stretch", height=260)
-            selected_cand_idx = st.selectbox(
-                "🎯 Kandidat für Orbit-, Stamp- & Stellarium-Analyse wählen",
-                options=list(range(len(res["catalog_df"]))),
-                index=0,
-                help="Wählt einen Kandidaten aus der Detektionskatalogtabelle zur detaillierten Analyse.",
-            )
-            selected_cand = res["catalog_df"].iloc[selected_cand_idx]
-            cand_x0 = float(selected_cand["x_centroid"])
-            cand_y0 = float(selected_cand["y_centroid"])
-            cand_vx = float(selected_cand["vx"])
-            cand_vy = float(selected_cand["vy"])
-
-            frame_stamps_np = []
-            for i in range(n_total):
-                frame_t = torch.from_numpy(res["raw_frames_np"][i])
-                xi = cand_x0 + cand_vx * (res["times_hours_list"][i] - res["times_hours_list"][0])
-                yi = cand_y0 + cand_vy * (res["times_hours_list"][i] - res["times_hours_list"][0])
-                stamp = extract_stamps(frame_t, [(xi, yi)], stamp_size=32)[0, 0].numpy()
-                frame_stamps_np.append(stamp)
-
-            stack_stamp_t = extract_stamps(
-                torch.from_numpy(res["stacked_np"]),
-                [(cand_x0, cand_y0)],
-                stamp_size=32,
-            )[0, 0].numpy()
-
-            fig_stamps = _plot_stamp_strip(
-                frame_stamps_np,
-                stack_stamp_t,
-                res["times_hours_list"],
-                scale_pct=st.session_state.get("plot_scale_pct", 85.0),
-            )
-            st.pyplot(fig_stamps, width="stretch")
-            plt.close(fig_stamps)
-
-            base_mjd_val = float(res["mjd_epochs"][0])
-            tracklet = compute_tracklet_endpoints(
-                res["wcs_ref"],
-                cand_x0,
-                cand_y0,
-                cand_vx,
-                cand_vy,
-                res["times_hours_list"],
-                base_mjd=base_mjd_val,
-            )
-            orb = estimate_kepler_orbit(tracklet)
-            exit_info = predict_boundary_exit(
-                res["wcs_ref"],
-                cand_x0,
-                cand_y0,
-                cand_vx,
-                cand_vy,
-                height=res["best_candidate"]["height"],
-                width=res["best_candidate"]["width"],
-                base_mjd=base_mjd_val,
-            )
-
-            cand_ra = float(selected_cand["ra"]) if "ra" in selected_cand else float(tracklet[0]["ra_deg"])
-            cand_dec = float(selected_cand["dec"]) if "dec" in selected_cand else float(tracklet[0]["dec_deg"])
-            cand_table = Table(
-                {
-                    "ra": [cand_ra],
-                    "dec": [cand_dec],
-                }
-            )
-
-            known_catalog = None
-            if "demo_gt" in st.session_state:
-                gt = st.session_state["demo_gt"]
-                gt_ra, gt_dec = res["wcs_ref"].wcs_pix2world(gt["x0"], gt["y0"], 0)
-                known_catalog = Table(
-                    {
-                        "object_id": ["Demo-Synth-Asteroid"],
-                        "ra": [float(gt_ra)],
-                        "dec": [float(gt_dec)],
-                    }
-                )
-            else:
-                known_catalog = Table(
-                    {
-                        "object_id": ["Reference-Field-Object"],
-                        "ra": [cand_ra],
-                        "dec": [cand_dec],
-                    }
-                )
-
-            cross_match = cross_match_known_objects(cand_table, known_catalog, max_sep_arcsec=10.0)
-            match_status = str(cross_match[0]["match_status"])
-            matched_id = str(cross_match[0]["matched_id"])
-            sep_arcsec = float(cross_match[0]["sep_arcsec"])
-
-            st.markdown("#### 🪐 Meilenstein 12 & 13: Orbit-Schätzung, Feld-Tracking, MPC-80 & Stellarium")
-            c_orb, c_exit, c_mpc, c_stel = st.columns([2, 2, 3, 2])
-            with c_orb:
-                st.markdown(f"**Orbit-Klasse:** `{orb['orbit_class']}`")
-                st.markdown(f"**Große Halbachse a:** `{orb['a_au']:.2f} AU`")
-                st.markdown(f"**Exzentrizität e / Inkl. i:** `e={orb['e']:.2f}` | `i={orb['i_deg']:.1f}°`")
-                st.markdown(f"**Cross-Match:** `{match_status}` ({matched_id}, {sep_arcsec:.2f}\")")
-            with c_exit:
-                next_ra = exit_info.get("next_field_ra_deg", exit_info.get("ra_next_deg", 0.0))
-                next_dec = exit_info.get("next_field_dec_deg", exit_info.get("dec_next_deg", 0.0))
-                st.markdown(f"**Feld-Austritt (Tracker):** `{exit_info['exit_edge']}` in `{exit_info['t_exit_hours']:.2f} h`")
-                st.caption(
-                    f"Austritts-Koordinate: RA={exit_info['ra_exit_deg']:.5f}° | Dec={exit_info['dec_exit_deg']:.5f}°"
-                )
-                st.caption(
-                    f"Nachbarfeld-Zentrum: RA={next_ra:.5f}° | Dec={next_dec:.5f}°"
-                )
-            with c_mpc:
-                mpc_block = export_tracklet_mpc80(tracklet, designation="K26A00A")
-                st.code(mpc_block, language="text")
-            with c_stel:
-                if st.button(
-                    "🔭 In Stellarium zentrieren (localhost:8090)",
-                    key=f"slew_{selected_cand_idx}",
-                    width="stretch",
-                ):
-                    slew_res = slew_stellarium_to_candidate(
-                        ra_deg=tracklet[0]["ra_deg"],
-                        dec_deg=tracklet[0]["dec_deg"],
-                        mjd=tracklet[0]["mjd"],
+                # Display raw and shifted stack
+                p_col1, p_col2 = st.columns(2)
+                with p_col1:
+                    fig_raw = _plot_comparison_frame(
+                        raw_frames_np[0],
+                        "Rohbild",
+                        target_xy=target_xy,
+                        scale_pct=st.session_state.get("plot_scale_pct", 85.0),
                     )
-                    if slew_res["ok"]:
-                        st.success(f"Kandidat in Stellarium zentriert (J2000: {slew_res['j2000_vec']}).")
-                    else:
-                        st.warning(
-                            f"Stellarium nicht erreichbar ({slew_res['error']}). Payload J2000={slew_res['j2000_vec']}"
-                        )
-        else:
-            st.info("Keine Kandidaten gefunden. Bitte führen Sie die Pipeline erneut aus.")
-    else:
-        st.info("Keine Pipeline-Ergebnisse verfügbar. Bitte führen Sie die Pipeline aus.")
+                    st.pyplot(fig_raw, width="stretch")
+                    plt.close(fig_raw)
+                with p_col2:
+                    fig_shifted = _plot_comparison_frame(
+                        shifted_stack_t.detach().cpu().numpy(),
+                        "Gestacktes Bild mit Kinematischer Verschiebung",
+                        target_xy=target_xy,
+                        scale_pct=st.session_state.get("plot_scale_pct", 85.0),
+                    )
+                    st.pyplot(fig_shifted, width="stretch")
+                    plt.close(fig_shifted)
+
+                # Display stamps
+                if len(raw_frames_np) > 0:
+                    st.markdown("#### 📸 Stamps")
+                    fig_stamps = _plot_stamp_strip(
+                        [frame[best_candidate["y_centroid"] - 16:best_candidate["y_centroid"] + 16, best_candidate["x_centroid"] - 16:best_candidate["x_centroid"] + 16] for frame in raw_frames_np],
+                        shifted_stack_t[best_candidate["y_centroid"] - 16:best_candidate["y_centroid"] + 16, best_candidate["x_centroid"] - 16:best_candidate["x_centroid"] + 16].detach().cpu().numpy(),
+                        times_hours=times_hours,
+                        scale_pct=st.session_state.get("plot_scale_pct", 85.0),
+                    )
+                    st.pyplot(fig_stamps, width="stretch")
+                    plt.close(fig_stamps)
+            else:
+                st.warning("Keine Kandidaten erkannt.")
+
+        except Exception as exc:
+            st.error(f"Fehler beim Ausführen der Pipeline: {exc}")
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
 
 def main():
-    st.set_page_config(
-        page_title="AstroProject — Asteroid Hunter Control Center",
-        page_icon="☄️",
-        layout="wide",
+    st.set_page_config(page_title="AstroProject", page_icon="🔭", layout="wide")
+    st.markdown(
+        "<h1 style='text-align: center;'>AstroProject</h1>",
+        unsafe_allow_html=True,
     )
-    st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
 
     device = render_sidebar_controls()
     render_top_statusbar(device)
 
-    tabs = st.tabs(
-        [
-            "🔭 Tab 1: FITS-Inspector & Photometrie",
-            "🚀 Tab 2: GPU Shift-and-Stack Pipeline & Velocity Grid Search",
-        ]
-    )
+    tabs = st.tabs(["FITS-Inspector", "Pipeline"])
     with tabs[0]:
         render_tab_fits_inspector(device)
     with tabs[1]:
