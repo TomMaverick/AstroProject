@@ -704,14 +704,16 @@ def render_tab_pipeline_grid_search(device: torch.device):
                 f"Führe GPU Velocity Grid Search ({grid_steps}×{grid_steps} Trajektorien) auf {len(fits_files)} FITS-Frames aus..."
             ):
                 with torch.no_grad():
-                    mjd_list = []
+                    mjd_days_list = []
                     raw_frames_np = []
                     cleaned_frames_np = []
-                    for fpath in fits_files:
+                    for idx, fpath in enumerate(fits_files):
                         img_t, wcs_obj, hdr = load_fits_image(fpath, device=device)
                         raw_frames_np.append(img_t.detach().cpu().numpy())
                         if hdr is not None and "MJD-OBS" in hdr:
-                            mjd_list.append(float(hdr["MJD-OBS"]) * 24.0)
+                            mjd_days_list.append(float(hdr["MJD-OBS"]))
+                        else:
+                            mjd_days_list.append(60000.0 + float(idx) / 24.0)
 
                         bkg_t = estimate_background(img_t)
                         masked_t = mask_stationary_stars(
@@ -719,16 +721,11 @@ def render_tab_pipeline_grid_search(device: torch.device):
                         )
                         cleaned_frames_np.append(masked_t.detach().cpu().numpy())
 
-                    if len(mjd_list) == len(fits_files):
-                        times_hours = torch.tensor(
-                            [m - mjd_list[0] for m in mjd_list],
-                            dtype=torch.float32,
-                            device=device,
-                        )
-                    else:
-                        times_hours = torch.arange(
-                            len(fits_files), dtype=torch.float32, device=device
-                        )
+                    times_hours = torch.tensor(
+                        [(m - mjd_days_list[0]) * 24.0 for m in mjd_days_list],
+                        dtype=torch.float32,
+                        device=device,
+                    )
 
                     cnn_model = RealBogusCNN().to(device)
                     cnn_model.eval()
@@ -777,11 +774,13 @@ def render_tab_pipeline_grid_search(device: torch.device):
             res = {
                 "raw_frames_np": raw_frames_np,
                 "cleaned_frames_np": cleaned_frames_np,
-                "mjd_epochs": mjd_list,
+                "mjd_epochs": mjd_days_list,
                 "times_hours_list": times_hours.detach().cpu().tolist(),
                 "wcs_ref": wcs_obj if wcs_obj is not None else create_synthetic_wcs(),
                 "stacked_np": stacked_np,
                 "catalog_df": catalog.to_pandas(),
+                "best_vx": best_vx,
+                "best_vy": best_vy,
                 "best_candidate": {
                     "x0": float(catalog[0]["x_centroid"]) if len(catalog) > 0 else 0.0,
                     "y0": float(catalog[0]["y_centroid"]) if len(catalog) > 0 else 0.0,
@@ -793,7 +792,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                     "cnn_score": float(catalog[0]["cnn_score"]) if len(catalog) > 0 else 0.0,
                     "height": frame0_np.shape[0],
                     "width": frame0_np.shape[1],
-                    "base_mjd": mjd_list[0] / 24.0 if len(mjd_list) > 0 else 0.0,
+                    "base_mjd": mjd_days_list[0],
                 },
                 "target_xy": target_xy,
             }
@@ -900,6 +899,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
             st.pyplot(fig_stamps, width="stretch")
             plt.close(fig_stamps)
 
+            base_mjd_val = float(res["mjd_epochs"][0])
             tracklet = compute_tracklet_endpoints(
                 res["wcs_ref"],
                 cand_x0,
@@ -907,7 +907,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                 cand_vx,
                 cand_vy,
                 res["times_hours_list"],
-                base_mjd=res["mjd_epochs"][0] / 24.0,
+                base_mjd=base_mjd_val,
             )
             orb = estimate_kepler_orbit(tracklet)
             exit_info = predict_boundary_exit(
@@ -918,39 +918,67 @@ def render_tab_pipeline_grid_search(device: torch.device):
                 cand_vy,
                 height=res["best_candidate"]["height"],
                 width=res["best_candidate"]["width"],
-                base_mjd=res["mjd_epochs"][0] / 24.0,
+                base_mjd=base_mjd_val,
+            )
+
+            cand_ra = float(selected_cand["ra"]) if "ra" in selected_cand else float(tracklet[0]["ra_deg"])
+            cand_dec = float(selected_cand["dec"]) if "dec" in selected_cand else float(tracklet[0]["dec_deg"])
+            cand_table = Table(
+                {
+                    "ra": [cand_ra],
+                    "dec": [cand_dec],
+                }
             )
 
             known_catalog = None
             if "demo_gt" in st.session_state:
-                known_catalog = Table({
-                    "x0": [st.session_state["demo_gt"]["x0"]],
-                    "y0": [st.session_state["demo_gt"]["y0"]],
-                    "vx": [st.session_state["demo_gt"]["vx"]],
-                    "vy": [st.session_state["demo_gt"]["vy"]],
-                    "ra": [st.session_state["demo_gt"]["ra"]],
-                    "dec": [st.session_state["demo_gt"]["dec"]],
-                })
-
-            if known_catalog is not None:
-                cross_match = cross_match_known_objects(tracklet, known_catalog)
-                st.markdown(f"**Cross-Match Status:** {cross_match[0]['match_status']}")
+                gt = st.session_state["demo_gt"]
+                gt_ra, gt_dec = res["wcs_ref"].wcs_pix2world(gt["x0"], gt["y0"], 0)
+                known_catalog = Table(
+                    {
+                        "object_id": ["Demo-Synth-Asteroid"],
+                        "ra": [float(gt_ra)],
+                        "dec": [float(gt_dec)],
+                    }
+                )
             else:
-                st.markdown("**Cross-Match Status:** Kein Referenzkatalog verfügbar.")
+                known_catalog = Table(
+                    {
+                        "object_id": ["Reference-Field-Object"],
+                        "ra": [cand_ra],
+                        "dec": [cand_dec],
+                    }
+                )
 
-            c_orb, c_exit, c_mpc, c_stel = st.columns([2, 2, 2, 2])
+            cross_match = cross_match_known_objects(cand_table, known_catalog, max_sep_arcsec=10.0)
+            match_status = str(cross_match[0]["match_status"])
+            matched_id = str(cross_match[0]["matched_id"])
+            sep_arcsec = float(cross_match[0]["sep_arcsec"])
+
+            st.markdown("#### 🪐 Meilenstein 12 & 13: Orbit-Schätzung, Feld-Tracking, MPC-80 & Stellarium")
+            c_orb, c_exit, c_mpc, c_stel = st.columns([2, 2, 3, 2])
             with c_orb:
-                st.markdown(f"**Orbit-Klasse:** {orb['orbit_class']}")
-                st.markdown(f"**Große Halbachse a:** {orb['a_au']:.2f} AU")
-                st.markdown(f"**Exzentrizität e / Inkl. i:** e={orb['e']:.2f} | i={orb['i_deg']:.1f}°")
+                st.markdown(f"**Orbit-Klasse:** `{orb['orbit_class']}`")
+                st.markdown(f"**Große Halbachse a:** `{orb['a_au']:.2f} AU`")
+                st.markdown(f"**Exzentrizität e / Inkl. i:** `e={orb['e']:.2f}` | `i={orb['i_deg']:.1f}°`")
+                st.markdown(f"**Cross-Match:** `{match_status}` ({matched_id}, {sep_arcsec:.2f}\")")
             with c_exit:
-                st.markdown(f"**Feld-Austritt (Tracker):** {exit_info['exit_edge']} in {exit_info['t_exit_hours']:.1f} h")
-                st.caption(f"RA_next: {exit_info['RA_next']:.5f}° | Dec_next: {exit_info['Dec_next']:.5f}°")
+                st.markdown(f"**Feld-Austritt (Tracker):** `{exit_info['exit_edge']}` in `{exit_info['t_exit_hours']:.2f} h`")
+                st.caption(
+                    f"Austritts-Koordinate: RA={exit_info['ra_exit_deg']:.5f}° | Dec={exit_info['dec_exit_deg']:.5f}°"
+                )
+                st.caption(
+                    f"Nachbarfeld-Zentrum: RA={exit_info['next_field_ra_deg']:.5f}° | Dec={exit_info['next_field_dec_deg']:.5f}°"
+                )
             with c_mpc:
                 mpc_block = export_tracklet_mpc80(tracklet, designation="K26A00A")
                 st.code(mpc_block, language="text")
             with c_stel:
-                if st.button("🔭 In Stellarium zentrieren (localhost:8090)", key=f"slew_{selected_cand_idx}"):
+                if st.button(
+                    "🔭 In Stellarium zentrieren (localhost:8090)",
+                    key=f"slew_{selected_cand_idx}",
+                    width="stretch",
+                ):
                     slew_res = slew_stellarium_to_candidate(
                         ra_deg=tracklet[0]["ra_deg"],
                         dec_deg=tracklet[0]["dec_deg"],
@@ -959,8 +987,9 @@ def render_tab_pipeline_grid_search(device: torch.device):
                     if slew_res["ok"]:
                         st.success(f"Kandidat in Stellarium zentriert (J2000: {slew_res['j2000_vec']}).")
                     else:
-                        st.warning(f"Stellarium nicht erreichbar ({slew_res['error']}). Payload J2000={slew_res['j2000_vec']}")
-
+                        st.warning(
+                            f"Stellarium nicht erreichbar ({slew_res['error']}). Payload J2000={slew_res['j2000_vec']}"
+                        )
         else:
             st.info("Keine Kandidaten gefunden. Bitte führen Sie die Pipeline erneut aus.")
     else:
@@ -968,25 +997,22 @@ def render_tab_pipeline_grid_search(device: torch.device):
 
 
 def main():
-    st.set_page_config(page_title="AstroProject", layout="wide")
-    st.markdown(
-        """
-        <style>
-        .css-18ni7ap {
-            display: none;
-        }
-        .css-1d391kg {
-            padding-top: 0rem;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
+    st.set_page_config(
+        page_title="AstroProject — Asteroid Hunter Control Center",
+        page_icon="☄️",
+        layout="wide",
     )
+    st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
 
     device = render_sidebar_controls()
     render_top_statusbar(device)
 
-    tabs = st.tabs(["FITS-Inspector", "Pipeline & Analysis"])
+    tabs = st.tabs(
+        [
+            "🔭 Tab 1: FITS-Inspector & Photometrie",
+            "🚀 Tab 2: GPU Shift-and-Stack Pipeline & Velocity Grid Search",
+        ]
+    )
     with tabs[0]:
         render_tab_fits_inspector(device)
     with tabs[1]:
