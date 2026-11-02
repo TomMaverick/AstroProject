@@ -61,3 +61,20 @@ def load_fits(file_path, hdu_index: int | None = None):
     if data.ndim > 2:
         data = np.squeeze(data)
     return data, header
+
+
+def save_fits_image(
+    tensor: torch.Tensor,
+    header: fits.Header,
+    file_path: str,
+    hdu_index: int | None = None,
+):
+    """Speichert ein [Y, X] PyTorch-Tensor als FITS-Bild mit dem angegebenen Header."""
+    data_np = tensor.cpu().numpy()
+    hdu = fits.PrimaryHDU(data=data_np, header=header)
+    if hdu_index is not None:
+        hdul = fits.HDUList([fits.PrimaryHDU(), hdu])
+        hdul[hdu_index + 1] = hdu
+    else:
+        hdul = fits.HDUList([hdu])
+    hdul.writeto(file_path, overwrite=True)
