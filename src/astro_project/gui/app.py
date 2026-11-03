@@ -131,22 +131,22 @@ def show_parameter_help_dialog():
     """Schlie\u00dfbares Dark-Mode-Modal-Fenster mit Erkl\u00e4rungen zu allen Parametern."""
     st.markdown(
         """
-        ### \ud83d\udd2d FITS-Inspector & Photometry
+        ### \U0001f52d FITS-Inspector & Photometry
         * **FITS Data Source:** W\u00e4hlt die Bildquelle aus dem lokalen Ordner `data/`, dem integrierten Astropy-Beispielbild (`HorseHead.fits`) oder einem eigenen Datei-Upload.
         * **Detection Threshold (\u03c3 \u00fcber Hintergrund):** Bestimmt, ab welchem Vielfachen des Hintergrundrauschens ($1\\sigma$) eine Punktquelle durch `DAOStarFinder` als Stern/Objekt akzeptiert wird. Niedrigere Werte finden schw\u00e4chere Quellen, erh\u00f6hen aber Falschdetektionen.
         * **DAOStarFinder FWHM [px]:** Erwartete Halbwertsbreite (Full Width at Half Maximum) der teleskopischen Punktspreizfunktion (PSF) in Pixeln f\u00fcr den Gau\u00df-Matched-Filter.
 
         ---
-        ### \ud83d\ude80 Velocity Grid Search & Orbit Analysis
+        ### \U0001f680 Velocity Grid Search & Orbit Analysis
         * **Pipeline-Datenquelle:** W\u00e4hlt zwischen der synthetischen Demo (`data/series_demo/`) und realen FITS-Sequenzen in `data/`.
         * **vx / vy Suchbereich Min & Max [px/h]:** Definiert den Geschwindigkeitsraum in Pixeln pro Stunde entlang der $[Y, X]$-Bildachsen (`vx` in X-Richtung, `vy` in Y-Richtung), der auf der GPU abgetastet wird.
         * **Grid-Schritte (`grid_steps`):** Anzahl der St\u00fctzstellen pro Geschwindigkeitsachse. Ein Wert von $N$ erzeugt ein $N \\times N$ Trajektorien-Gitter.
         * **RealBogusCNN Score-Schwelle (`cnn_threshold`):** Mindest-Klassifikationswahrscheinlichkeit $[0.0, 1.0]$ des 3-Kanal-CNNs (Mean, Median, Variance), ab der ein gestackter Kandidat als echtes bewegtes Objekt (`Real`) eingestuft wird.
         * **DAOStarFinder Detektions-Schwelle [ADU \u00fcber Hintergrund]:** Absoluter Schwellenwert im Shift-and-Stack-Summenbild. Da das Signal-zu-Rausch-Verh\u00e4ltnis beim Stacking mit $\\sqrt{N_{\\text{Frames}}}$ w\u00e4chst, treten hier zuvor unsichtbare Sub-Sigma-Asteroiden deutlich hervor.
-        * **\ud83c\udf9e\ufe0f Frame-Navigator & Spur-Overlay:** Erlaubt das Durchbl\u00e4ttern der Einzelbilder $0 \\dots N-1$ (Rohbild vs. sternmaskiertes Bild) im direkten Vergleich zum Shift-and-Stack-Summenbild.
+        * **\U0001f39e\ufe0f Frame-Navigator & Spur-Overlay:** Erlaubt das Durchbl\u00e4ttern der Einzelbilder $0 \\dots N-1$ (Rohbild vs. sternmaskiertes Bild) im direkten Vergleich zum Shift-and-Stack-Summenbild.
 
         ---
-        ### \ud83e\ude90 Orbit Estimation & Stellarium Integration
+        ### \U0001fa90 Orbit Estimation & Stellarium Integration
         * **V\u00e4is\u00e4l\u00e4-Kepler-Orbit:** Sch\u00e4tzt aus der kurzen Winkelgeschwindigkeit am Himmel die gro\u00dfe Halbachse $a\\,[\\text{AU}]$, Exzentrizit\u00e4t $e$, Inklination $i\\,[^\\circ]$ und die Orbit-Klasse (z.B. Main-Belt, NEA).
         * **Nachbarfeld-Tracking:** Berechnet Zeitpunkt und Himmelskoordinate, an denen das Objekt den aktuellen Sensorbereich $[0, W] \\times [0, H]$ verl\u00e4sst.
         * **Stellarium Live-Slew:** Zentriert die virtuelle Kamera in Stellarium \u00fcber das RemoteControl-Plugin (`http://localhost:8090/api`) direkt auf die Kandidaten-Koordinate.
@@ -226,16 +226,16 @@ def render_sidebar_controls() -> torch.device:
 
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
-            if st.button("\ud83d\udd04 Refresh", width="stretch"):
+            if st.button("\U0001f504 Refresh", width="stretch"):
                 st.rerun()
         with col_btn2:
-            if st.button("\ud83e\uddf9 VRAM Flush", width="stretch"):
+            if st.button("\U0001f9f9 VRAM Flush", width="stretch"):
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 st.rerun()
 
         plot_scale_pct = st.slider(
-            "\ud83d\udd0d Plot-Gr\u00f6\u00dfe [%]",
+            "\U0001f50d Plot-Gr\u00f6\u00dfe [%]",
             min_value=50,
             max_value=100,
             value=85,
@@ -260,17 +260,17 @@ def render_top_statusbar(device: torch.device):
         )
     with c_ram:
         st.markdown(
-            f"<div class='top-statusbar'><span>\ud83e\udde0 <b>RAM:</b> {metrics['ram_percent']:.1f}% ({metrics['ram_used_gb']:.1f}/{metrics['ram_total_gb']:.0f} GB)</span></div>",
+            f"<div class='top-statusbar'><span>\U0001f9e0 <b>RAM:</b> {metrics['ram_percent']:.1f}% ({metrics['ram_used_gb']:.1f}/{metrics['ram_total_gb']:.0f} GB)</span></div>",
             unsafe_allow_html=True,
         )
     with c_vram:
         st.markdown(
-            f"<div class='top-statusbar'><span>\ud83c\udfae <b>RTX 4070 VRAM:</b> {metrics['vram_used_gb']:.2f} / {metrics['vram_total_gb']:.2f} GB</span></div>",
+            f"<div class='top-statusbar'><span>\U0001f3ae <b>RTX 4070 VRAM:</b> {metrics['vram_used_gb']:.2f} / {metrics['vram_total_gb']:.2f} GB</span></div>",
             unsafe_allow_html=True,
         )
     with c_dev:
         st.markdown(
-            f"<div class='top-statusbar'><span>\ud83c\udfaf <b>Device:</b> <code class='status-badge'>{device.type.upper()}</code></span></div>",
+            f"<div class='top-statusbar'><span>\U0001f3af <b>Device:</b> <code class='status-badge'>{device.type.upper()}</code></span></div>",
             unsafe_allow_html=True,
         )
 
@@ -507,7 +507,7 @@ def render_tab_fits_inspector(device: torch.device):
     """FITS-Inspector & Photometry"""
     hdr_col1, hdr_col2 = st.columns([3, 1])
     with hdr_col1:
-        st.subheader("\ud83d\udd2d FITS-Inspector & Photometry")
+        st.subheader("\U0001f52d FITS-Inspector & Photometry")
     with hdr_col2:
         if st.button("\u2753 Parameter-Hilfe \u00f6ffnen", key="help_btn_tab1", width="stretch"):
             show_parameter_help_dialog()
@@ -650,7 +650,7 @@ def render_tab_fits_inspector(device: torch.device):
             st.pyplot(fig_res, width="stretch")
             plt.close(fig_res)
 
-        st.markdown("#### \ud83d\udccb Detected Sources Catalog")
+        st.markdown("#### \U0001f4cb Detected Sources Catalog")
         if sources_df is not None and len(sources_df) > 0:
             st.dataframe(sources_df, width="stretch", height=280)
         else:
@@ -658,7 +658,7 @@ def render_tab_fits_inspector(device: torch.device):
                 "No sources detected above the selected threshold. Try lowering the Detection Threshold slider."
             )
 
-        with st.expander("\ud83d\udcc4 FITS Header Metadata"):
+        with st.expander("\U0001f4c4 FITS Header Metadata"):
             if header is not None:
                 hdr_rows = [
                     {
@@ -688,7 +688,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
     """Velocity Grid Search & Orbit Analysis"""
     hdr_col1, hdr_col2 = st.columns([3, 1])
     with hdr_col1:
-        st.subheader("\ud83d\ude80 Velocity Grid Search & Orbit Analysis")
+        st.subheader("\U0001f680 Velocity Grid Search & Orbit Analysis")
     with hdr_col2:
         if st.button("\u2753 Parameter-Hilfe \u00f6ffnen", key="help_btn_tab2", width="stretch"):
             show_parameter_help_dialog()
@@ -707,7 +707,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
 
     with st.expander("\u2699\ufe0f Parameter fuer synthetische Bildserie (Low-SNR)", expanded=False):
         randomize_series = st.checkbox(
-            "\ud83c\udfb2 Parameter zufaellig generieren",
+            "\U0001f3b2 Parameter zufaellig generieren",
             value=False,
             help="Zieht Anzahl Frames (3\u201315), Geschwindigkeiten vx/vy, Asteroiden-SNR und Startposition (x0, y0) zuf\u00e4llig.",
         )
@@ -768,7 +768,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                 "Im Zufalls-Modus werden SNR, Geschwindigkeiten, Sterne und Position automatisch vom Algorithmus variiert."
             )
 
-        if st.button("\ud83d\ude80 Serie generieren", width="stretch"):
+        if st.button("\U0001f680 Serie generieren", width="stretch"):
             try:
                 with torch.no_grad():
                     paths, times, gt = generate_demo_asteroid_series(
@@ -832,12 +832,12 @@ def render_tab_pipeline_grid_search(device: torch.device):
         help="Absoluter Schwellenwert in ADU über dem Hintergrund im gestackten Summenbild für die DAOStarFinder-Quellendetektion.",
     )
 
-    run_clicked = st.button("\ud83d\ude80 GPU-Grid-Search & Pipeline ausf\u00fchren", width="stretch")
+    run_clicked = st.button("\U0001f680 GPU-Grid-Search & Pipeline ausf\u00fchren", width="stretch")
 
     if run_clicked:
         if len(fits_files) == 0:
             st.warning(
-                f"Keine FITS-Dateien in `{selected_folder}` gefunden. Bitte zuerst oben im Expander auf '\ud83d\ude80 Serie generieren' klicken."
+                f"Keine FITS-Dateien in `{selected_folder}` gefunden. Bitte zuerst oben im Expander auf '\U0001f680 Serie generieren' klicken."
             )
             return
 
@@ -923,12 +923,12 @@ def render_tab_pipeline_grid_search(device: torch.device):
 
             # Display results
             if len(catalog) > 0:
-                st.markdown("#### \ud83d\udccb Erkannte Kandidaten")
+                st.markdown("#### \U0001f4cb Erkannte Kandidaten")
                 st.dataframe(catalog.to_pandas(), width="stretch", height=280)
 
                 best_candidate = catalog[0]
                 st.markdown(
-                    f"### \ud83c\udf0c Bester Kandidat: vx={best_vx:.2f} px/h, vy={best_vy:.2f} px/h"
+                    f"### \U0001f30c Bester Kandidat: vx={best_vx:.2f} px/h, vy={best_vy:.2f} px/h"
                 )
 
                 p_col1, p_col2 = st.columns(2)
@@ -952,7 +952,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                     plt.close(fig_shifted)
 
                 if len(raw_frames_np) > 0 and target_xy is not None:
-                    st.markdown("#### \ud83d\udcf8 Stamps")
+                    st.markdown("#### \U0001f4f8 Stamps")
                     frame_stamps_list = [
                         extract_stamps(
                             torch.from_numpy(frame), [target_xy], stamp_size=32
@@ -972,7 +972,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                     )
                     st.pyplot(fig_stamps, width="stretch")
                     plt.close(fig_stamps)
-                st.markdown("#### \ud83e\ude90 Orbit Estimation & Stellarium Integration")
+                st.markdown("#### \U0001fa90 Orbit Estimation & Stellarium Integration")
                 orbit_wcs = ref_wcs if ref_wcs is not None else create_synthetic_wcs()
                 times_list = times_hours.detach().cpu().tolist()
                 base_mjd = mjd_days_list[0] if len(mjd_days_list) > 0 else 60000.0
@@ -1014,7 +1014,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                 o_col3.metric("Inclination i", f"{nom_orbit['i_deg']:.1f}\u00b0")
                 o_col4.metric("Orbit Class", str(nom_orbit["orbit_class"]))
 
-                st.markdown("#### \ud83c\udf1e Solar System Orbit & Monte-Carlo Uncertainty")
+                st.markdown("#### \U0001f31e Solar System Orbit & Monte-Carlo Uncertainty")
                 fig_orbit = _plot_solar_system_orbit(
                     a_nom=float(nom_orbit["a_au"]),
                     e_nom=float(nom_orbit["e"]),
@@ -1034,7 +1034,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
 
 
 def main():
-    st.set_page_config(page_title="AstroProject", page_icon="\ud83d\udd2d", layout="wide")
+    st.set_page_config(page_title="AstroProject", page_icon="*", layout="wide")
     st.markdown(
         "<h1 style='text-align: center;'>AstroProject</h1>",
         unsafe_allow_html=True,
@@ -1045,8 +1045,8 @@ def main():
 
     tabs = st.tabs(
         [
-            "\ud83d\udd2d FITS-Inspector & Photometry",
-            "\ud83d\ude80 Velocity Grid Search & Orbit Analysis",
+            "\U0001f52d FITS-Inspector & Photometry",
+            "\U0001f680 Velocity Grid Search & Orbit Analysis",
         ]
     )
     with tabs[0]:
