@@ -367,12 +367,12 @@ def run_automated_survey_batch(
             mad_val = torch.median(torch.abs(sample_frame - med_val))
             noise_std = max(float(mad_val.item()) * 1.4826, 1.0)
 
-            star_mask_thresh = float(single_frame_mask_sigma) * noise_std
+            star_mask_thresh = max(float(single_frame_mask_sigma) * noise_std, 150.0)
             det_thresh = (
                 float(stack_detection_sigma) * (noise_std / np.sqrt(max(n_frames, 1)))
             )
             pipeline_det_thresh = (
-                max(float(stack_detection_sigma), 5.0)
+                max(float(stack_detection_sigma), 4.5)
                 * (noise_std / np.sqrt(max(n_frames, 1)))
             )
 

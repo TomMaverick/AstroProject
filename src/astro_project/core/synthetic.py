@@ -135,7 +135,10 @@ def generate_demo_asteroid_series(
     bg_level = 100.0
     noise_std = 2.0
 
-    asteroid_amp = max(float(asteroid_snr) * noise_std * 5.0, 6.0)
+    if float(asteroid_snr) <= 0.0:
+        asteroid_amp = 0.0
+    else:
+        asteroid_amp = max(float(asteroid_snr) * noise_std * 5.0, 6.0)
 
     default_stars = [
         (22.0, 26.0, 1200.0),
