@@ -372,7 +372,7 @@ def run_automated_survey_batch(
                 float(stack_detection_sigma) * (noise_std / np.sqrt(max(n_frames, 1)))
             )
             pipeline_det_thresh = (
-                max(float(stack_detection_sigma), 4.2)
+                max(float(stack_detection_sigma), 5.0)
                 * (noise_std / np.sqrt(max(n_frames, 1)))
             )
 
