@@ -60,6 +60,26 @@ DARK_MODE_CSS = """
         background-color: #111827;
         border-right: 1px solid #1f2937;
     }
+    section[data-testid="stSidebar"] > div:first-child {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+    }
+    .sidebar-title {
+        font-size: 1.55rem;
+        font-weight: 800;
+        color: #f8fafc;
+        text-align: center;
+        letter-spacing: 0.03em;
+        margin-top: -0.5rem;
+        margin-bottom: 0.8rem;
+        padding-bottom: 0.6rem;
+        border-bottom: 1px solid #334155;
+    }
+    .sidebar-statusbar-wrap {
+        margin-top: auto;
+        padding-top: 0.5rem;
+    }
     div[data-testid="stMetric"] {
         background-color: #1e293b;
         border: 1px solid #334155;
@@ -294,42 +314,44 @@ def get_hardware_metrics() -> dict:
 def render_sidebar_statusbar(device: torch.device):
     """Renders the hardware statusbar (CPU, RAM, VRAM, Device) at the bottom of the sidebar in a compact 2x2 grid."""
     metrics = get_hardware_metrics()
-    st.sidebar.markdown("#### Hardware Status")
-    r1_c1, r1_c2 = st.sidebar.columns(2)
-    with r1_c1:
-        st.markdown(
-            f"<div class='sidebar-hw-card'>"
-            f"<span class='sidebar-hw-label'>\u26a1 CPU</span>"
-            f"<b>{metrics['cpu_percent']:.1f}%</b>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-    with r1_c2:
-        st.markdown(
-            f"<div class='sidebar-hw-card'>"
-            f"<span class='sidebar-hw-label'>\U0001f9e0 RAM</span>"
-            f"<b>{metrics['ram_percent']:.0f}%</b> ({metrics['ram_used_gb']:.1f}/{metrics['ram_total_gb']:.0f}G)"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+    with st.sidebar:
+        st.markdown("<div class='sidebar-statusbar-wrap'></div>", unsafe_allow_html=True)
+        st.markdown("#### Hardware Status")
+        r1_c1, r1_c2 = st.columns(2)
+        with r1_c1:
+            st.markdown(
+                f"<div class='sidebar-hw-card'>"
+                f"<span class='sidebar-hw-label'>\u26a1 CPU</span>"
+                f"<b>{metrics['cpu_percent']:.1f}%</b>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        with r1_c2:
+            st.markdown(
+                f"<div class='sidebar-hw-card'>"
+                f"<span class='sidebar-hw-label'>\U0001f9e0 RAM</span>"
+                f"<b>{metrics['ram_percent']:.0f}%</b> ({metrics['ram_used_gb']:.1f}/{metrics['ram_total_gb']:.0f}G)"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
 
-    r2_c1, r2_c2 = st.sidebar.columns(2)
-    with r2_c1:
-        st.markdown(
-            f"<div class='sidebar-hw-card'>"
-            f"<span class='sidebar-hw-label'>\U0001f3ae VRAM</span>"
-            f"<b>{metrics['vram_used_gb']:.2f}</b> / {metrics['vram_total_gb']:.0f} GB"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-    with r2_c2:
-        st.markdown(
-            f"<div class='sidebar-hw-card'>"
-            f"<span class='sidebar-hw-label'>\U0001f3af Device</span>"
-            f"<code class='status-badge'>{device.type.upper()}</code>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+        r2_c1, r2_c2 = st.columns(2)
+        with r2_c1:
+            st.markdown(
+                f"<div class='sidebar-hw-card'>"
+                f"<span class='sidebar-hw-label'>\U0001f3ae VRAM</span>"
+                f"<b>{metrics['vram_used_gb']:.2f}</b> / {metrics['vram_total_gb']:.0f} GB"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        with r2_c2:
+            st.markdown(
+                f"<div class='sidebar-hw-card'>"
+                f"<span class='sidebar-hw-label'>\U0001f3af Device</span>"
+                f"<code class='status-badge'>{device.type.upper()}</code>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
 
 
 def render_sidebar_controls() -> tuple[torch.device, str]:
@@ -347,6 +369,10 @@ def render_sidebar_controls() -> tuple[torch.device, str]:
     if "show_all_planets" not in st.session_state:
         st.session_state["show_all_planets"] = False
 
+    st.sidebar.markdown(
+        "<div class='sidebar-title'>\U0001f52d AstroProject</div>",
+        unsafe_allow_html=True,
+    )
     st.sidebar.markdown("### Navigation")
     nav_items = [
         "FITS-Inspector & Photometry",
@@ -375,7 +401,6 @@ def render_sidebar_controls() -> tuple[torch.device, str]:
     device = resolve_device(
         selected_dev if selected_dev == "cuda" and cuda_available else "cpu"
     )
-    st.sidebar.markdown("---")
     render_sidebar_statusbar(device)
     return device, st.session_state["nav_selection"]
 
@@ -544,7 +569,8 @@ def _plot_solar_system_orbit(
 ) -> plt.Figure:
     """Creates a top-down ecliptic Dark-Mode plot of the nominal orbit, planets, and MC uncertainty envelope."""
     scale = max(float(scale_pct) / 100.0, 0.4)
-    fig, ax = plt.subplots(figsize=(6.0 * scale, 5.5 * scale), facecolor="#0b0f19")
+    fig_w = 7.4 * scale if show_all_planets else 6.0 * scale
+    fig, ax = plt.subplots(figsize=(fig_w, 5.5 * scale), facecolor="#0b0f19")
     ax.set_facecolor("#0b0f19")
 
     theta = np.linspace(0.0, 2.0 * np.pi, 360)
@@ -591,15 +617,15 @@ def _plot_solar_system_orbit(
             r_p * np.sin(theta),
             color=planet["color"],
             linestyle="--",
-            linewidth=1.1,
+            linewidth=1.0,
             alpha=0.75,
-            label=f"{planet['name']} ({r_p:.2f} AU)",
+            label=f"{planet['name']} ({r_p:.1f} AU)",
         )
         ax.scatter(
             [px],
             [py],
             color=planet["color"],
-            s=45,
+            s=38,
             zorder=4,
             edgecolors="#0b0f19",
             linewidths=0.8,
@@ -612,7 +638,7 @@ def _plot_solar_system_orbit(
         r_nom * np.sin(theta),
         color="#ef4444",
         linewidth=2.2,
-        label=f"Nominal Orbit (a={a_nom_val:.2f} AU, e={e_nom_val:.2f})",
+        label=f"Nominal (a={a_nom_val:.2f} AU, e={e_nom_val:.2f})",
     )
 
     # Sun at (0, 0)
@@ -620,7 +646,7 @@ def _plot_solar_system_orbit(
         [0.0],
         [0.0],
         color="#facc15",
-        s=130,
+        s=110,
         zorder=5,
         edgecolors="#fef08a",
         label="Sun (0, 0)",
@@ -639,13 +665,27 @@ def _plot_solar_system_orbit(
     for spine in ax.spines.values():
         spine.set_color("#334155")
 
-    ax.legend(
-        loc="upper right",
-        facecolor="#1e293b",
-        edgecolor="#334155",
-        labelcolor="#f8fafc",
-        fontsize=8,
-    )
+    if show_all_planets:
+        ax.legend(
+            loc="upper left",
+            bbox_to_anchor=(1.02, 1.0),
+            borderaxespad=0.0,
+            facecolor="#1e293b",
+            edgecolor="#334155",
+            labelcolor="#f8fafc",
+            fontsize=7.5,
+            framealpha=0.92,
+            handlelength=1.4,
+            labelspacing=0.35,
+        )
+    else:
+        ax.legend(
+            loc="upper right",
+            facecolor="#1e293b",
+            edgecolor="#334155",
+            labelcolor="#f8fafc",
+            fontsize=8,
+        )
     fig.tight_layout()
     return fig
 
@@ -679,7 +719,7 @@ def render_tab_fits_inspector(device: torch.device):
                 "Upload FITS file",
             ],
             horizontal=True,
-            help="Wählt die Quelle der FITS-Bilddaten: Lokales Verzeichnis data/, Astropy-Beispielbild oder eigener Datei-Upload.",
+            help="W\u00e4hlt die Quelle der FITS-Bilddaten: Lokales Verzeichnis data/, Astropy-Beispielbild oder eigener Datei-Upload.",
         )
     with col_ctrl1:
         sigma_thresh = st.slider(
@@ -688,7 +728,7 @@ def render_tab_fits_inspector(device: torch.device):
             max_value=20.0,
             value=5.0,
             step=0.5,
-            help="Detektionsschwelle als Vielfaches des Hintergrundrauschens (1σ). Niedrigere Werte finden lichtschwächere Quellen.",
+            help="Detektionsschwelle als Vielfaches des Hintergrundrauschens (1\u03c3). Niedrigere Werte finden lichtschw\u00e4chere Quellen.",
         )
     with col_ctrl2:
         fwhm_val = st.slider(
@@ -697,7 +737,7 @@ def render_tab_fits_inspector(device: torch.device):
             max_value=10.0,
             value=3.0,
             step=0.5,
-            help="Erwartete Halbwertsbreite (FWHM in Pixeln) der Stern-PSF für den DAOStarFinder Gauß-Filter.",
+            help="Erwartete Halbwertsbreite (FWHM in Pixeln) der Stern-PSF f\u00fcr den DAOStarFinder Gau\u00df-Filter.",
         )
 
     target_fits_path: str | None = None
@@ -712,7 +752,7 @@ def render_tab_fits_inspector(device: torch.device):
         selected_rel = st.selectbox(
             "Select FITS file from data/",
             options=[str(p.relative_to(data_dir)) for p in local_fits],
-            help="Wählt eine lokale FITS-Datei aus dem Verzeichnis data/ zur photometrischen Analyse aus.",
+            help="W\u00e4hlt eine lokale FITS-Datei aus dem Verzeichnis data/ zur photometrischen Analyse aus.",
         )
         target_fits_path = str(data_dir / selected_rel)
     elif source_mode == "Astropy Sample (HorseHead.fits)":
@@ -727,7 +767,7 @@ def render_tab_fits_inspector(device: torch.device):
         uploaded = st.file_uploader(
             "Upload FITS Image (.fits, .fit, .fts)",
             type=["fits", "fit", "fts"],
-            help="Lädt eine eigene FITS-Datei zum Inspectieren hoch.",
+            help="L\u00e4dt eine eigene FITS-Datei zum Inspizieren hoch.",
         )
         if uploaded is None:
             st.info("Please upload a FITS file to inspect.")
@@ -853,86 +893,116 @@ def render_tab_pipeline_grid_search(device: torch.device):
     )
 
     with st.expander("\u2699\ufe0f Parameter fuer synthetische Bildserie (Low-SNR)", expanded=False):
-        randomize_series = st.checkbox(
-            "\U0001f3b2 Parameter zufaellig generieren",
-            value=False,
-            help="Zieht Anzahl Frames (3\u201315), Geschwindigkeiten vx/vy, Asteroiden-SNR und Startposition (x0, y0) zuf\u00e4llig.",
-        )
-        if not randomize_series:
-            cfg_c1, cfg_c2, cfg_c3 = st.columns(3)
-            with cfg_c1:
-                custom_n_frames = st.slider(
-                    "Anzahl Frames",
-                    min_value=3,
-                    max_value=15,
-                    value=5,
-                    step=1,
-                    help="Anzahl der zeitlich aufeinanderfolgenden FITS-Aufnahmen in data/series_demo/.",
-                )
-                custom_n_stars = st.slider(
-                    "Anzahl Feldsterne",
-                    min_value=0,
-                    max_value=10,
-                    value=5,
-                    step=1,
-                    help="Anzahl der hellen station\u00e4ren Hintergrundsterne im Bildfeld.",
-                )
-            with cfg_c2:
-                custom_vx = st.slider(
-                    "Geschwindigkeit vx [px/h]",
-                    min_value=-5.0,
-                    max_value=5.0,
-                    value=2.0,
-                    step=0.25,
-                    help="Wahre horizontale Eigenbewegung des synthetischen Asteroiden in Pixeln pro Stunde.",
-                )
-                custom_vy = st.slider(
-                    "Geschwindigkeit vy [px/h]",
-                    min_value=-5.0,
-                    max_value=5.0,
-                    value=-1.0,
-                    step=0.25,
-                    help="Wahre vertikale Eigenbewegung des synthetischen Asteroiden in Pixeln pro Stunde.",
-                )
-            with cfg_c3:
-                custom_snr = st.slider(
-                    "Asteroiden-SNR (Einzelbild)",
-                    min_value=0.8,
-                    max_value=5.0,
-                    value=1.5,
-                    step=0.1,
-                    help="Signal-zu-Rausch-Verh\u00e4ltnis des Asteroiden pro Einzelaufnahme.",
-                )
-            custom_n_frames = int(custom_n_frames)
-            custom_n_stars = int(custom_n_stars)
-            custom_vx = float(custom_vx)
-            custom_vy = float(custom_vy)
-            custom_snr = float(custom_snr)
-        else:
-            custom_n_frames, custom_vx, custom_vy, custom_snr, custom_n_stars = (
-                5,
-                2.0,
-                -1.0,
-                1.5,
-                5,
+        st.markdown("**\U0001f3b2 Zufalls-Steuerung pro Parameter:**")
+        rc1, rc2, rc3, rc4 = st.columns(4)
+        with rc1:
+            rand_frames = st.checkbox(
+                "Anzahl Frames zuf\u00e4llig",
+                value=False,
+                key="rand_frames",
+                help="Zieht die Anzahl der Frames zuf\u00e4llig im Bereich [3, 15].",
             )
-            st.caption(
-                "Im Zufalls-Modus werden SNR, Geschwindigkeiten, Sterne und Position automatisch vom Algorithmus variiert."
+        with rc2:
+            rand_velocity = st.checkbox(
+                "vx & vy zuf\u00e4llig",
+                value=False,
+                key="rand_velocity",
+                help="Zieht die Geschwindigkeiten vx und vy zuf\u00e4llig im Bereich [-3.0, 3.0] px/h.",
+            )
+        with rc3:
+            rand_snr = st.checkbox(
+                "Asteroiden-SNR zuf\u00e4llig",
+                value=False,
+                key="rand_snr",
+                help="Zieht das Einzelbild-SNR des Asteroiden zuf\u00e4llig im Bereich [1.0, 5.0].",
+            )
+        with rc4:
+            rand_stars = st.checkbox(
+                "Feldsterne zuf\u00e4llig",
+                value=False,
+                key="rand_stars",
+                help="Zieht die Anzahl der station\u00e4ren Hintergrundsterne zuf\u00e4llig im Bereich [1, 10].",
+            )
+
+        cfg_c1, cfg_c2, cfg_c3 = st.columns(3)
+        with cfg_c1:
+            custom_n_frames = st.slider(
+                "Anzahl Frames",
+                min_value=3,
+                max_value=15,
+                value=5,
+                step=1,
+                disabled=bool(rand_frames),
+                help="Anzahl der zeitlich aufeinanderfolgenden FITS-Aufnahmen in data/series_demo/.",
+            )
+            custom_n_stars = st.slider(
+                "Anzahl Feldsterne",
+                min_value=0,
+                max_value=10,
+                value=5,
+                step=1,
+                disabled=bool(rand_stars),
+                help="Anzahl der hellen station\u00e4ren Hintergrundsterne im Bildfeld.",
+            )
+        with cfg_c2:
+            custom_vx = st.slider(
+                "Geschwindigkeit vx [px/h]",
+                min_value=-5.0,
+                max_value=5.0,
+                value=2.0,
+                step=0.25,
+                disabled=bool(rand_velocity),
+                help="Wahre horizontale Eigenbewegung des synthetischen Asteroiden in Pixeln pro Stunde.",
+            )
+            custom_vy = st.slider(
+                "Geschwindigkeit vy [px/h]",
+                min_value=-5.0,
+                max_value=5.0,
+                value=-1.0,
+                step=0.25,
+                disabled=bool(rand_velocity),
+                help="Wahre vertikale Eigenbewegung des synthetischen Asteroiden in Pixeln pro Stunde.",
+            )
+        with cfg_c3:
+            custom_snr = st.slider(
+                "Asteroiden-SNR (Einzelbild)",
+                min_value=0.8,
+                max_value=5.0,
+                value=1.5,
+                step=0.1,
+                disabled=bool(rand_snr),
+                help="Signal-zu-Rausch-Verh\u00e4ltnis des Asteroiden pro Einzelaufnahme.",
             )
 
         if st.button("\U0001f680 Serie generieren", use_container_width=True):
             try:
+                rng_gen = np.random.default_rng()
+                eff_n_frames = int(rng_gen.integers(3, 16)) if rand_frames else int(custom_n_frames)
+                if rand_velocity:
+                    eff_vx = float(rng_gen.uniform(-3.0, 3.0))
+                    eff_vy = float(rng_gen.uniform(-3.0, 3.0))
+                    if abs(eff_vx) < 0.4 and abs(eff_vy) < 0.4:
+                        eff_vx = 1.5
+                else:
+                    eff_vx = float(custom_vx)
+                    eff_vy = float(custom_vy)
+                eff_snr = float(rng_gen.uniform(1.0, 5.0)) if rand_snr else float(custom_snr)
+                eff_n_stars = int(rng_gen.integers(1, 11)) if rand_stars else int(custom_n_stars)
+                any_rand = bool(rand_frames or rand_velocity or rand_snr or rand_stars)
+                seed_val = int(rng_gen.integers(1, 2**31 - 1)) if any_rand else 42
+
                 with torch.no_grad():
                     paths, times, gt = generate_demo_asteroid_series(
                         output_dir="data/series_demo",
-                        n_frames=int(custom_n_frames),
+                        n_frames=int(eff_n_frames),
                         height=128,
                         width=128,
-                        vx=float(custom_vx),
-                        vy=float(custom_vy),
-                        asteroid_snr=float(custom_snr),
-                        n_stars=int(custom_n_stars),
-                        randomize=bool(randomize_series),
+                        vx=float(eff_vx),
+                        vy=float(eff_vy),
+                        asteroid_snr=float(eff_snr),
+                        n_stars=int(eff_n_stars),
+                        randomize=False,
+                        seed=int(seed_val),
                         device=device,
                     )
                     st.session_state["demo_gt"] = gt
@@ -965,7 +1035,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
         vy_min = st.number_input("vy Suchbereich Min [px/h]", value=-2.0, step=0.5, help="Minimale vertikale Suchgeschwindigkeit vy in Pixeln pro Stunde entlang der Y-Achse.")
         vy_max = st.number_input("vy Suchbereich Max [px/h]", value=2.0, step=0.5, help="Maximale vertikale Suchgeschwindigkeit vy in Pixeln pro Stunde entlang der Y-Achse.")
     with c3:
-        grid_steps = st.slider("Grid-Schritte (grid_steps)", min_value=3, max_value=25, value=5, help="Anzahl der Gitterpunkte pro Geschwindigkeitsachse (erzeugt grid_steps × grid_steps Test-Trajektorien auf der GPU).")
+        grid_steps = st.slider("Grid-Schritte (grid_steps)", min_value=3, max_value=25, value=5, help="Anzahl der Gitterpunkte pro Geschwindigkeitsachse (erzeugt grid_steps \u00d7 grid_steps Test-Trajektorien auf der GPU).")
         cnn_threshold = st.slider(
             "RealBogusCNN Score-Schwelle (cnn_threshold)",
             min_value=0.0,
@@ -976,12 +1046,12 @@ def render_tab_pipeline_grid_search(device: torch.device):
         )
 
     detection_threshold = st.slider(
-        "DAOStarFinder Detektions-Schwelle [ADU über Hintergrund]",
+        "DAOStarFinder Detektions-Schwelle [ADU \u00fcber Hintergrund]",
         min_value=4.0,
         max_value=200.0,
         value=8.0,
         step=2.0,
-        help="Absoluter Schwellenwert in ADU über dem Hintergrund im gestackten Summenbild für die DAOStarFinder-Quellendetektion.",
+        help="Absoluter Schwellenwert in ADU \u00fcber dem Hintergrund im gestackten Summenbild f\u00fcr die DAOStarFinder-Quellendetektion.",
     )
 
     vx_min = float(vx_min)
@@ -1002,12 +1072,12 @@ def render_tab_pipeline_grid_search(device: torch.device):
             return
 
         if vx_min > vx_max or vy_min > vy_max:
-            st.error("Ungültiger Suchbereich: Min-Wert darf nicht größer als Max-Wert sein.")
+            st.error("Ung\u00fcltiger Suchbereich: Min-Wert darf nicht gr\u00f6\u00dfer als Max-Wert sein.")
             return
 
         try:
             with st.spinner(
-                f"Führe GPU Velocity Grid Search ({grid_steps}×{grid_steps} Trajektorien) auf {len(fits_files)} FITS-Frames aus..."
+                f"F\u00fchre GPU Velocity Grid Search ({grid_steps}\u00d7{grid_steps} Trajektorien) auf {len(fits_files)} FITS-Frames aus..."
             ):
                 with torch.no_grad():
                     mjd_days_list = []
@@ -1079,7 +1149,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-            st.success("Pipeline erfolgreich ausgeführt.")
+            st.success("Pipeline erfolgreich ausgef\u00fchrt.")
 
             # Display results
             if len(catalog) > 0:
@@ -1189,7 +1259,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                 st.warning("Keine Kandidaten erkannt.")
 
         except Exception as exc:
-            st.error(f"Fehler beim Ausführen der Pipeline: {exc}")
+            st.error(f"Fehler beim Ausf\u00fchren der Pipeline: {exc}")
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
@@ -1198,11 +1268,6 @@ def main():
     st.set_page_config(page_title="AstroProject", page_icon="*", layout="wide")
     st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
     device, nav_selection = render_sidebar_controls()
-
-    st.markdown(
-        "<h1 style='text-align: center; margin-bottom: 0.3rem;'>AstroProject</h1>",
-        unsafe_allow_html=True,
-    )
 
     if nav_selection == "FITS-Inspector & Photometry":
         render_tab_fits_inspector(device)
