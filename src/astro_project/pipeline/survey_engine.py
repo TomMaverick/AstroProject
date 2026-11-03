@@ -178,23 +178,26 @@ def compute_discovery_score(
 
         coherence = float(np.clip(median_flux / max(mean_flux, 1e-6), 0.0, 1.0))
 
+        stack_outer = stack_arr[outer_mask]
+        stack_bg_med = float(np.median(stack_outer))
+        stack_net_peak = float(np.max(stack_arr[py0:py1, px0:px1]) - stack_bg_med)
+        if stack_net_peak < float(detection_threshold):
+            is_noise_fluctuation = True
+
         if bg_std > 1e-4:
-            stack_outer = stack_arr[outer_mask]
-            stack_bg_med = float(np.median(stack_outer))
             stack_bg_std = max(
                 1.4826 * float(np.median(np.abs(stack_outer - stack_bg_med))),
                 bg_std / np.sqrt(max(n_f, 1)),
             )
-            stack_net_peak = float(np.max(stack_arr[y0:y1, x0:x1]) - stack_bg_med)
             stack_snr = stack_net_peak / max(stack_bg_std, 1e-6)
 
-            active_fraction = float(np.mean(frame_peaks > 1.5 * bg_std))
+            active_fraction = float(np.mean(frame_peaks > 1.8 * bg_std))
             median_frame_snr = float(np.median(frame_peaks) / max(bg_std, 1e-6))
 
             if (
                 stack_snr < 5.0
                 or active_fraction < 0.6
-                or median_frame_snr < 1.5
+                or median_frame_snr < 2.0
                 or mean_flux < 0.5 * bg_std
             ):
                 is_noise_fluctuation = True
@@ -206,7 +209,7 @@ def compute_discovery_score(
     cnn_prob = float(candidate_row.get("cnn_score", 0.5))
 
     snr_ratio = peak_val / max(float(detection_threshold), 1e-6)
-    if snr_ratio < 1.0:
+    if snr_ratio < 1.25:
         is_noise_fluctuation = True
 
     snr_score = float(np.clip(snr_ratio * 17.5, 0.0, 35.0))
@@ -222,7 +225,7 @@ def compute_discovery_score(
 
     raw_score = (snr_score + cnn_score_pts) * (0.3 + 0.7 * coherence) + orbit_pts + novelty_pts
     if coherence < 0.35 or is_noise_fluctuation:
-        raw_score = min(raw_score * 0.4, 35.0)
+        raw_score = min(raw_score * 0.4, 30.0)
 
     final_score = float(np.clip(raw_score, 0.0, 100.0))
     if final_score >= 75.0:
@@ -434,7 +437,7 @@ def run_automated_survey_batch(
                         vx,
                         vy,
                         wcs_offsets_xy=wcs_offsets,
-                        method="mean",
+                        method="median",
                     )
 
                     frame_stamps_list = [
