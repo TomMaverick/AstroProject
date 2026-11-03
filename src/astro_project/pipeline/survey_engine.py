@@ -189,14 +189,14 @@ def compute_discovery_score(
             )
             stack_snr = stack_net_peak / max(stack_bg_std, 1e-6)
 
-            active_fraction = float(np.mean(frame_peaks > 1.2 * bg_std))
-            median_frame_snr = float(np.median(frame_peaks) / max(bg_std, 1e-6))
+            active_fraction = float(np.mean(frame_fluxes > 0.7 * bg_std))
+            median_frame_snr = float(median_flux / max(bg_std, 1e-6))
 
             if (
-                stack_snr < 4.2
+                stack_snr < 4.5
                 or active_fraction < 0.6
-                or median_frame_snr < 1.4
-                or mean_flux < 0.25 * bg_std
+                or median_frame_snr < 0.8
+                or mean_flux < 0.8 * bg_std
             ):
                 is_noise_fluctuation = True
                 coherence *= 0.25
@@ -371,10 +371,7 @@ def run_automated_survey_batch(
             det_thresh = (
                 float(stack_detection_sigma) * (noise_std / np.sqrt(max(n_frames, 1)))
             )
-            pipeline_det_thresh = (
-                max(float(stack_detection_sigma), 4.5)
-                * (noise_std / np.sqrt(max(n_frames, 1)))
-            )
+            pipeline_det_thresh = det_thresh
 
             ref_wcs = wcs_list[0] if wcs_list[0] is not None else create_synthetic_wcs()
             if vx_range is None or vy_range is None:
