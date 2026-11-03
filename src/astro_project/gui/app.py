@@ -127,18 +127,34 @@ DARK_MODE_CSS = """
     }
     section[data-testid="stSidebar"] button[kind="primary"] {
         background-color: #3b0764 !important;
-        border: 1px solid #7e22ce !important;
+        border: 1px solid #7c3aed !important;
         color: #f8fafc !important;
         font-weight: 600 !important;
     }
     section[data-testid="stSidebar"] button[kind="primary"]:hover {
         background-color: #4c1d95 !important;
-        border-color: #a855f7 !important;
+        border: 1px solid #7c3aed !important;
     }
     section[data-testid="stSidebar"] button[kind="secondary"] {
         background-color: #1e293b !important;
         border: 1px solid #334155 !important;
         color: #cbd5e1 !important;
+    }
+    .sidebar-hw-card {
+        background-color: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 6px 8px;
+        margin-bottom: 6px;
+        font-size: 0.78rem;
+        line-height: 1.25;
+        color: #f8fafc;
+    }
+    .sidebar-hw-label {
+        color: #94a3b8;
+        font-size: 0.72rem;
+        font-weight: 600;
+        display: block;
     }
 </style>
 """
@@ -275,8 +291,49 @@ def get_hardware_metrics() -> dict:
     }
 
 
+def render_sidebar_statusbar(device: torch.device):
+    """Renders the hardware statusbar (CPU, RAM, VRAM, Device) at the bottom of the sidebar in a compact 2x2 grid."""
+    metrics = get_hardware_metrics()
+    st.sidebar.markdown("#### Hardware Status")
+    r1_c1, r1_c2 = st.sidebar.columns(2)
+    with r1_c1:
+        st.markdown(
+            f"<div class='sidebar-hw-card'>"
+            f"<span class='sidebar-hw-label'>\u26a1 CPU</span>"
+            f"<b>{metrics['cpu_percent']:.1f}%</b>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    with r1_c2:
+        st.markdown(
+            f"<div class='sidebar-hw-card'>"
+            f"<span class='sidebar-hw-label'>\U0001f9e0 RAM</span>"
+            f"<b>{metrics['ram_percent']:.0f}%</b> ({metrics['ram_used_gb']:.1f}/{metrics['ram_total_gb']:.0f}G)"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    r2_c1, r2_c2 = st.sidebar.columns(2)
+    with r2_c1:
+        st.markdown(
+            f"<div class='sidebar-hw-card'>"
+            f"<span class='sidebar-hw-label'>\U0001f3ae VRAM</span>"
+            f"<b>{metrics['vram_used_gb']:.2f}</b> / {metrics['vram_total_gb']:.0f} GB"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    with r2_c2:
+        st.markdown(
+            f"<div class='sidebar-hw-card'>"
+            f"<span class='sidebar-hw-label'>\U0001f3af Device</span>"
+            f"<code class='status-badge'>{device.type.upper()}</code>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+
 def render_sidebar_controls() -> tuple[torch.device, str]:
-    """Renders main navigation buttons and the 'System & Einstellungen' modal button in the sidebar."""
+    """Renders main navigation buttons, the 'System & Einstellungen' modal button, and the 2x2 statusbar in the sidebar."""
     cuda_available = torch.cuda.is_available()
     if cuda_available:
         torch.cuda.init()
@@ -318,21 +375,9 @@ def render_sidebar_controls() -> tuple[torch.device, str]:
     device = resolve_device(
         selected_dev if selected_dev == "cuda" and cuda_available else "cpu"
     )
+    st.sidebar.markdown("---")
+    render_sidebar_statusbar(device)
     return device, st.session_state["nav_selection"]
-
-
-def render_top_statusbar(device: torch.device):
-    """Rendert die ultra-kompakte ~1cm (34px) horizontale Statusbar ueber volle Breite ganz oben im Hauptbereich."""
-    metrics = get_hardware_metrics()
-    st.markdown(
-        f"<div class='top-statusbar'>"
-        f"<span>\u26a1 <b>CPU:</b> {metrics['cpu_percent']:.1f}%</span>"
-        f"<span>\U0001f9e0 <b>RAM:</b> {metrics['ram_percent']:.1f}% ({metrics['ram_used_gb']:.1f}/{metrics['ram_total_gb']:.0f} GB)</span>"
-        f"<span>\U0001f3ae <b>RTX 4070 VRAM:</b> {metrics['vram_used_gb']:.2f} / {metrics['vram_total_gb']:.2f} GB</span>"
-        f"<span>\U0001f3af <b>Device:</b> <code class='status-badge'>{device.type.upper()}</code></span>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
 
 
 def _plot_comparison_frame(
@@ -730,7 +775,7 @@ def render_tab_fits_inspector(device: torch.device):
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Tensor Shape [Y, X]", f"[{height}, {width}]")
         m2.metric("Background Median", f"{bkg_median:.2f} ADU")
-        m3.metric("Noise Level (1σ)", f"{noise_std:.2f} ADU")
+        m3.metric("Noise Level (1\u03c3)", f"{noise_std:.2f} ADU")
         m4.metric("Detected Sources", f"{n_sources}")
 
         p_col1, p_col2 = st.columns(2)
@@ -754,7 +799,7 @@ def render_tab_fits_inspector(device: torch.device):
 
         st.markdown("#### \U0001f4cb Detected Sources Catalog")
         if sources_df is not None and len(sources_df) > 0:
-            st.dataframe(sources_df, width="stretch", height=280)
+            st.dataframe(sources_df, use_container_width=True, height=280)
         else:
             st.info(
                 "No sources detected above the selected threshold. Try lowering the Detection Threshold slider."
@@ -771,7 +816,7 @@ def render_tab_fits_inspector(device: torch.device):
                     for k in header.keys()
                     if str(k).strip() != ""
                 ]
-                st.dataframe(pd.DataFrame(hdr_rows), width="stretch", height=260)
+                st.dataframe(pd.DataFrame(hdr_rows), use_container_width=True, height=260)
             else:
                 st.write("No FITS header available.")
     except Exception as exc:
@@ -858,6 +903,11 @@ def render_tab_pipeline_grid_search(device: torch.device):
                     step=0.1,
                     help="Signal-zu-Rausch-Verh\u00e4ltnis des Asteroiden pro Einzelaufnahme.",
                 )
+            custom_n_frames = int(custom_n_frames)
+            custom_n_stars = int(custom_n_stars)
+            custom_vx = float(custom_vx)
+            custom_vy = float(custom_vy)
+            custom_snr = float(custom_snr)
         else:
             custom_n_frames, custom_vx, custom_vy, custom_snr, custom_n_stars = (
                 5,
@@ -933,6 +983,14 @@ def render_tab_pipeline_grid_search(device: torch.device):
         step=2.0,
         help="Absoluter Schwellenwert in ADU über dem Hintergrund im gestackten Summenbild für die DAOStarFinder-Quellendetektion.",
     )
+
+    vx_min = float(vx_min)
+    vx_max = float(vx_max)
+    vy_min = float(vy_min)
+    vy_max = float(vy_max)
+    grid_steps = int(grid_steps)
+    cnn_threshold = float(cnn_threshold)
+    detection_threshold = float(detection_threshold)
 
     run_clicked = st.button("\U0001f680 GPU-Grid-Search & Pipeline ausf\u00fchren", use_container_width=True)
 
@@ -1026,7 +1084,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
             # Display results
             if len(catalog) > 0:
                 st.markdown("#### \U0001f4cb Erkannte Kandidaten")
-                st.dataframe(catalog.to_pandas(), width="stretch", height=280)
+                st.dataframe(catalog.to_pandas(), use_container_width=True, height=280)
 
                 best_candidate = catalog[0]
                 st.markdown(
@@ -1145,7 +1203,6 @@ def main():
         "<h1 style='text-align: center; margin-bottom: 0.3rem;'>AstroProject</h1>",
         unsafe_allow_html=True,
     )
-    render_top_statusbar(device)
 
     if nav_selection == "FITS-Inspector & Photometry":
         render_tab_fits_inspector(device)
