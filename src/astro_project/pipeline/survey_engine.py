@@ -158,7 +158,12 @@ def compute_discovery_score(
         pos_fluxes = np.maximum(frame_fluxes, 0.0)
         median_flux = float(np.median(pos_fluxes))
         mean_flux = float(np.mean(pos_fluxes))
-        coherence = float(np.clip(median_flux / max(mean_flux, 1e-6), 0.0, 1.0))
+        
+        noise_std = float(np.std(stamps_arr))
+        if mean_flux < 0.25 * noise_std:
+            coherence = 0.0
+        else:
+            coherence = float(np.clip(median_flux / max(mean_flux, 1e-6), 0.0, 1.0))
     else:
         coherence = 0.5
 
