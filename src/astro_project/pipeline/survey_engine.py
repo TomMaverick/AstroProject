@@ -493,71 +493,11 @@ def run_automated_survey_batch(
                             "stack_stamp_np": stack_stamp_np,
                         }
 
-            if best_cand is not None and best_cand["score"] >= float(min_keep_score):
-                tier_label = "gold" if best_cand["score"] >= 75.0 else "silver"
-                tier_folder = "gold_tier" if tier_label == "gold" else "silver_tier"
-                dest_dir = base_path / "candidates" / tier_folder / field_id
-                dest_dir.mkdir(parents=True, exist_ok=True)
-
-                np.savez_compressed(
-                    dest_dir / "stamps.npz",
-                    frame_stamps=best_cand["frame_stamps_np"],
-                    stack_stamp=best_cand["stack_stamp_np"],
-                )
-
-                mpc_txt = export_tracklet_mpc80(
-                    best_cand["epochs"],
-                    designation="K26S00A",
-                    mag=20.5,
-                    band="V",
-                    obs_code="500",
-                )
-                (dest_dir / "mpc80.txt").write_text(mpc_txt + "\n", encoding="utf-8")
-
-                meta_payload = {
-                    "field_id": field_id,
-                    "field_hash": field_hash,
-                    "telescope": telescope,
-                    "score": best_cand["score"],
-                    "tier": tier_label,
-                    "coherence": best_cand["coherence"],
-                    "x0": best_cand["x0"],
-                    "y0": best_cand["y0"],
-                    "vx": best_cand["vx"],
-                    "vy": best_cand["vy"],
-                    "peak": best_cand["peak"],
-                    "cnn_score": best_cand["cnn_score"],
-                    "orbit": best_cand["orbit_info"],
-                }
-                (dest_dir / "metadata.json").write_text(
-                    json.dumps(meta_payload, indent=2), encoding="utf-8"
-                )
-
-                if tier_label == "gold":
-                    for fpath in file_paths:
-                        src_p = Path(fpath)
-                        if src_p.is_file():
-                            shutil.copy2(src_p, dest_dir / src_p.name)
-                    gold_saved += 1
-                else:
-                    silver_saved += 1
-
-                if auto_purge:
-                    _purge_files(file_paths)
-
-                ledger.record_scan(
-                    field_hash=field_hash,
-                    telescope=telescope,
-                    ra_deg=ra_deg,
-                    dec_deg=dec_deg,
-                    mjd_start=mjd_start,
-                    mjd_end=mjd_end,
-                    n_frames=n_frames,
-                    status=tier_label,
-                    best_score=best_cand["score"],
-                )
-                candidates_list.append(meta_payload)
-            else:
+            if (
+                len(catalog) == 0
+                or best_cand is None
+                or best_cand["score"] < float(min_keep_score)
+            ):
                 if auto_purge:
                     _purge_files(file_paths)
                 empty_purged += 1
@@ -570,8 +510,73 @@ def run_automated_survey_batch(
                     mjd_end=mjd_end,
                     n_frames=n_frames,
                     status="empty_purged",
-                    best_score=best_score,
+                    best_score=best_cand["score"] if best_cand else 0.0,
                 )
+                continue
+
+            tier_label = "gold" if best_cand["score"] >= 75.0 else "silver"
+            tier_folder = "gold_tier" if tier_label == "gold" else "silver_tier"
+            dest_dir = base_path / "candidates" / tier_folder / field_id
+            dest_dir.mkdir(parents=True, exist_ok=True)
+
+            np.savez_compressed(
+                dest_dir / "stamps.npz",
+                frame_stamps=best_cand["frame_stamps_np"],
+                stack_stamp=best_cand["stack_stamp_np"],
+            )
+
+            mpc_txt = export_tracklet_mpc80(
+                best_cand["epochs"],
+                designation="K26S00A",
+                mag=20.5,
+                band="V",
+                obs_code="500",
+            )
+            (dest_dir / "mpc80.txt").write_text(mpc_txt + "\n", encoding="utf-8")
+
+            meta_payload = {
+                "field_id": field_id,
+                "field_hash": field_hash,
+                "telescope": telescope,
+                "score": best_cand["score"],
+                "tier": tier_label,
+                "coherence": best_cand["coherence"],
+                "x0": best_cand["x0"],
+                "y0": best_cand["y0"],
+                "vx": best_cand["vx"],
+                "vy": best_cand["vy"],
+                "peak": best_cand["peak"],
+                "cnn_score": best_cand["cnn_score"],
+                "orbit": best_cand["orbit_info"],
+            }
+            (dest_dir / "metadata.json").write_text(
+                json.dumps(meta_payload, indent=2), encoding="utf-8"
+            )
+
+            if tier_label == "gold":
+                for fpath in file_paths:
+                    src_p = Path(fpath)
+                    if src_p.is_file():
+                        shutil.copy2(src_p, dest_dir / src_p.name)
+                gold_saved += 1
+            else:
+                silver_saved += 1
+
+            if auto_purge:
+                _purge_files(file_paths)
+
+            ledger.record_scan(
+                field_hash=field_hash,
+                telescope=telescope,
+                ra_deg=ra_deg,
+                dec_deg=dec_deg,
+                mjd_start=mjd_start,
+                mjd_end=mjd_end,
+                n_frames=n_frames,
+                status=tier_label,
+                best_score=best_cand["score"],
+            )
+            candidates_list.append(meta_payload)
 
     return {
         "scanned": scanned,
