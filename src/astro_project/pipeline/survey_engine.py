@@ -181,7 +181,7 @@ def compute_discovery_score(
         stack_outer = stack_arr[outer_mask]
         stack_bg_med = float(np.median(stack_outer))
         stack_net_peak = float(np.max(stack_arr[py0:py1, px0:px1]) - stack_bg_med)
-        if stack_net_peak < 0.75 * float(detection_threshold):
+        if stack_net_peak < float(detection_threshold):
             is_noise_fluctuation = True
 
         if bg_std > 1e-4:
@@ -191,14 +191,14 @@ def compute_discovery_score(
             )
             stack_snr = stack_net_peak / max(stack_bg_std, 1e-6)
 
-            active_fraction = float(np.mean(frame_peaks > 1.5 * bg_std))
+            active_fraction = float(np.mean(frame_peaks > 1.8 * bg_std))
             median_frame_snr = float(np.median(frame_peaks) / max(bg_std, 1e-6))
 
             if (
-                stack_snr < 4.0
-                or active_fraction < 0.4
-                or median_frame_snr < 1.5
-                or mean_flux < 0.25 * bg_std
+                stack_snr < 5.0
+                or active_fraction < 0.6
+                or median_frame_snr < 2.0
+                or mean_flux < 0.5 * bg_std
             ):
                 is_noise_fluctuation = True
                 coherence *= 0.25
@@ -209,7 +209,7 @@ def compute_discovery_score(
     cnn_prob = float(candidate_row.get("cnn_score", 0.5))
 
     snr_ratio = peak_val / max(float(detection_threshold), 1e-6)
-    if snr_ratio < 1.1:
+    if snr_ratio < 1.25:
         is_noise_fluctuation = True
 
     snr_score = float(np.clip(snr_ratio * 17.5, 0.0, 35.0))
