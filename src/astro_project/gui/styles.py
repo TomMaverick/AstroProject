@@ -16,26 +16,15 @@ DARK_MODE_CSS = """
         background-color: #111827;
         border-right: 1px solid #1f2937;
     }
-    section[data-testid="stSidebar"] > div:first-child,
-    div[data-testid="stSidebarContent"],
+    div[data-testid="stSidebarContent"] {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
     div[data-testid="stSidebarUserContent"] {
-        display: flex !important;
-        flex-direction: column !important;
-        min-height: 92vh;
-    }
-    div[data-testid="stSidebarUserContent"] > div:first-child {
-        display: flex !important;
-        flex-direction: column !important;
-        flex-grow: 1 !important;
-        min-height: 88vh;
-    }
-    div[data-testid="stSidebarUserContent"] div[data-testid="stVerticalBlock"] {
-        flex-grow: 1 !important;
-        display: flex !important;
-        flex-direction: column !important;
-    }
-    div[data-testid="stSidebarUserContent"] div[data-testid="stElementContainer"]:has(.sidebar-statusbar-wrap) {
-        margin-top: auto !important;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
     }
     .sidebar-title {
         font-size: 1.55rem;
@@ -43,14 +32,14 @@ DARK_MODE_CSS = """
         color: #f8fafc;
         text-align: center;
         letter-spacing: 0.03em;
-        margin-top: -0.5rem;
+        margin-top: 0;
         margin-bottom: 0.8rem;
         padding-bottom: 0.6rem;
         border-bottom: 1px solid #334155;
     }
     .sidebar-statusbar-wrap {
         margin-top: auto;
-        padding-top: 0.6rem;
+        padding-top: 0.8rem;
         border-top: 1px solid #1f2937;
     }
     div[data-testid="stMetric"] {

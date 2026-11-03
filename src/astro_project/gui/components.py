@@ -30,7 +30,7 @@ def show_parameter_help_dialog():
         ---
         ### \U0001fa90 Orbit Estimation & Stellarium Integration
         * **V\u00e4is\u00e4l\u00e4-Kepler-Orbit:** Sch\u00e4tzt aus der kurzen Winkelgeschwindigkeit am Himmel die gro\u00dfe Halbachse $a\\,[\\text{AU}]$, Exzentrizit\u00e4t $e$, Inklination $i\\,[^\\circ]$ und die Orbit-Klasse (z.B. Main-Belt, NEA).
-        * **Nachbarfeld-Tracking:** Berechnet Zeitpunkt und Himmelskoordinate, an denen das Objekt den aktuellen Sensorbereich $[0, W] \\times [0, H]$ verl\u00e4sst.
+        * **Nachbarfeld-Tracking:** Berechnet Zeitpunkt und Himmelskoordinate, an denen das Objekt den aktuellen Sensorbereich $[0, W] \\times [H]$ verl\u00e4sst.
         * **Stellarium Live-Slew:** Zentriert die virtuelle Kamera in Stellarium \u00fcber das RemoteControl-Plugin (`http://localhost:8090/api`) direkt auf die Kandidaten-Koordinate.
         """
     )
@@ -145,7 +145,10 @@ def render_sidebar_statusbar(device: torch.device):
     """Renders the hardware statusbar (CPU, RAM, VRAM, Device) at the bottom of the sidebar in a compact 2x2 grid."""
     metrics = get_hardware_metrics()
     with st.sidebar:
-        st.markdown("<div class='sidebar-statusbar-wrap'></div>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='sidebar-statusbar-wrap'></div>",
+            unsafe_allow_html=True,
+        )
         st.markdown("#### Hardware Status")
         r1_c1, r1_c2 = st.columns(2)
         with r1_c1:
@@ -186,11 +189,6 @@ def render_sidebar_statusbar(device: torch.device):
 
 def render_sidebar_controls() -> tuple[torch.device, str]:
     """Renders main navigation buttons, the 'System & Einstellungen' modal button, and the 2x2 statusbar in the sidebar."""
-    st.sidebar.markdown(
-        "<div class='sidebar-title'>\U0001f52d AstroProject</div>",
-        unsafe_allow_html=True,
-    )
-
     cuda_available = torch.cuda.is_available()
     if cuda_available:
         torch.cuda.init()
@@ -204,29 +202,34 @@ def render_sidebar_controls() -> tuple[torch.device, str]:
     if "show_all_planets" not in st.session_state:
         st.session_state["show_all_planets"] = False
 
-    st.sidebar.markdown("### Navigation")
-    nav_items = [
-        "FITS-Inspector & Photometry",
-        "Velocity Grid Search & Orbit Analysis",
-    ]
-    for item in nav_items:
-        is_active = st.session_state["nav_selection"] == item
-        if st.sidebar.button(
-            item,
-            key=f"nav_btn_{item}",
-            type="primary" if is_active else "secondary",
+    with st.sidebar:
+        st.markdown(
+            "<div class='sidebar-title'>\U0001f52d AstroProject</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown("### Navigation")
+        nav_items = [
+            "FITS-Inspector & Photometry",
+            "Velocity Grid Search & Orbit Analysis",
+        ]
+        for item in nav_items:
+            is_active = st.session_state["nav_selection"] == item
+            if st.button(
+                item,
+                key=f"nav_btn_{item}",
+                type="primary" if is_active else "secondary",
+                use_container_width=True,
+            ):
+                st.session_state["nav_selection"] = item
+                st.rerun()
+
+        st.markdown("---")
+        if st.button(
+            "System & Einstellungen \u2699\ufe0f",
+            key="open_settings_modal_btn",
             use_container_width=True,
         ):
-            st.session_state["nav_selection"] = item
-            st.rerun()
-
-    st.sidebar.markdown("---")
-    if st.sidebar.button(
-        "System & Einstellungen \u2699\ufe0f",
-        key="open_settings_modal_btn",
-        use_container_width=True,
-    ):
-        show_system_settings_dialog()
+            show_system_settings_dialog()
 
     selected_dev = st.session_state.get("selected_dev", "cuda" if cuda_available else "cpu")
     device = resolve_device(
