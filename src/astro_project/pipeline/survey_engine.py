@@ -17,7 +17,10 @@ from astro_project.core.orbit import (
     export_tracklet_mpc80,
 )
 from astro_project.core.wcs_utils import compute_wcs_frame_offsets, create_synthetic_wcs
-from astro_project.pipeline.kinematics import single_pass_wcs_kinematic_stack
+from astro_project.pipeline.kinematics import (
+    mask_stationary_stars,
+    single_pass_wcs_kinematic_stack,
+)
 from astro_project.pipeline.orchestration import run_pipeline
 from astro_project.pipeline.velocity_search import _shift_frames_along_trajectory
 
@@ -145,25 +148,57 @@ def compute_discovery_score(
     cosmic rays and hotpixels.
     """
     stamps_arr = np.asarray(frame_stamps, dtype=np.float32).copy()
+    stack_arr = np.asarray(stack_stamp, dtype=np.float32).copy()
+    is_noise_fluctuation = False
+
     if stamps_arr.ndim == 3 and stamps_arr.shape[0] > 0:
-        _, h, w = stamps_arr.shape
+        n_f, h, w = stamps_arr.shape
         cy, cx = h // 2, w // 2
         y0, y1 = max(0, cy - 2), min(h, cy + 3)
         x0, x1 = max(0, cx - 2), min(w, cx + 3)
-        
-        for i in range(stamps_arr.shape[0]):
-            stamps_arr[i] -= float(np.median(stamps_arr[i]))
-            
+        py0, py1 = max(0, cy - 1), min(h, cy + 2)
+        px0, px1 = max(0, cx - 1), min(w, cx + 2)
+
+        outer_mask = np.ones((h, w), dtype=bool)
+        outer_mask[max(0, cy - 3) : min(h, cy + 4), max(0, cx - 3) : min(w, cx + 4)] = False
+
+        for i in range(n_f):
+            bg_med_i = float(np.median(stamps_arr[i][outer_mask]))
+            stamps_arr[i] -= bg_med_i
+
+        outer_vals = stamps_arr[:, outer_mask]
+        bg_mad = float(np.median(np.abs(outer_vals - np.median(outer_vals))))
+        bg_std = 1.4826 * bg_mad
+
         frame_fluxes = np.mean(stamps_arr[:, y0:y1, x0:x1], axis=(1, 2))
+        frame_peaks = np.max(stamps_arr[:, py0:py1, px0:px1], axis=(1, 2))
         pos_fluxes = np.maximum(frame_fluxes, 0.0)
         median_flux = float(np.median(pos_fluxes))
         mean_flux = float(np.mean(pos_fluxes))
-        
-        noise_std = float(np.std(stamps_arr))
-        if mean_flux < 0.25 * noise_std:
-            coherence = 0.0
-        else:
-            coherence = float(np.clip(median_flux / max(mean_flux, 1e-6), 0.0, 1.0))
+
+        coherence = float(np.clip(median_flux / max(mean_flux, 1e-6), 0.0, 1.0))
+
+        if bg_std > 1e-4:
+            stack_outer = stack_arr[outer_mask]
+            stack_bg_med = float(np.median(stack_outer))
+            stack_bg_std = max(
+                1.4826 * float(np.median(np.abs(stack_outer - stack_bg_med))),
+                bg_std / np.sqrt(max(n_f, 1)),
+            )
+            stack_net_peak = float(np.max(stack_arr[y0:y1, x0:x1]) - stack_bg_med)
+            stack_snr = stack_net_peak / max(stack_bg_std, 1e-6)
+
+            active_fraction = float(np.mean(frame_peaks > 1.5 * bg_std))
+            median_frame_snr = float(np.median(frame_peaks) / max(bg_std, 1e-6))
+
+            if (
+                stack_snr < 5.0
+                or active_fraction < 0.6
+                or median_frame_snr < 1.5
+                or mean_flux < 0.5 * bg_std
+            ):
+                is_noise_fluctuation = True
+                coherence *= 0.25
     else:
         coherence = 0.5
 
@@ -171,6 +206,9 @@ def compute_discovery_score(
     cnn_prob = float(candidate_row.get("cnn_score", 0.5))
 
     snr_ratio = peak_val / max(float(detection_threshold), 1e-6)
+    if snr_ratio < 1.0:
+        is_noise_fluctuation = True
+
     snr_score = float(np.clip(snr_ratio * 17.5, 0.0, 35.0))
     cnn_score_pts = float(np.clip(cnn_prob * 40.0, 0.0, 40.0))
 
@@ -183,8 +221,8 @@ def compute_discovery_score(
     novelty_pts = 4.0 if is_known_object else 10.0
 
     raw_score = (snr_score + cnn_score_pts) * (0.3 + 0.7 * coherence) + orbit_pts + novelty_pts
-    if coherence < 0.35:
-        raw_score *= 0.4
+    if coherence < 0.35 or is_noise_fluctuation:
+        raw_score = min(raw_score * 0.4, 35.0)
 
     final_score = float(np.clip(raw_score, 0.0, 100.0))
     if final_score >= 75.0:
@@ -371,6 +409,9 @@ def run_automated_survey_batch(
                         wcs_list, ref_wcs, height, width, device=resolved_dev
                     )
 
+                masked_frames = mask_stationary_stars(
+                    frames_tensor, threshold=star_mask_thresh
+                )
                 times_list = times_hours.detach().cpu().tolist()
                 for cand_idx, row in enumerate(catalog):
                     x0 = float(row["x_centroid"])
@@ -381,14 +422,14 @@ def run_automated_survey_batch(
                     cnn_prob = float(row["cnn_score"])
 
                     shifted = _shift_frames_along_trajectory(
-                        frames_tensor,
+                        masked_frames,
                         times_hours,
                         vx,
                         vy,
                         wcs_offsets_xy=wcs_offsets,
                     )
                     stack_img = single_pass_wcs_kinematic_stack(
-                        frames_tensor,
+                        masked_frames,
                         times_hours,
                         vx,
                         vy,
