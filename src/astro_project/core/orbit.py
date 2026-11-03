@@ -49,6 +49,105 @@ def compute_tracklet_endpoints(
     return epochs
 
 
+def propagate_kepler_ephemeris(
+    times_hours: torch.Tensor | Sequence[float],
+    orbit_preset: str = "main_belt",
+    base_mjd: float = 60000.0,
+    ra0_deg: float = 180.0,
+    dec0_deg: float = 45.0,
+) -> tuple[list[dict], dict]:
+    """
+    Propagate heliocentric 2-body Keplerian ephemerides (elliptical e < 1, a > 0
+    or hyperbolic e > 1, a < 0) across observation times and return apparent
+    topocentric/geocentric sky coordinates (ra_deg, dec_deg, mjd) anchored near
+    (ra0_deg, dec0_deg) together with the true orbital elements dict.
+    """
+    if isinstance(times_hours, torch.Tensor):
+        t_arr = times_hours.detach().cpu().numpy().astype(np.float64)
+    else:
+        t_arr = np.asarray(times_hours, dtype=np.float64)
+
+    preset_key = str(orbit_preset).strip().lower()
+    if preset_key == "nea":
+        a_au = 1.18
+        e = 0.35
+        i_deg = 12.5
+        orbit_class = "NEA"
+    elif preset_key == "hyperbolic":
+        a_au = -1.25
+        e = 1.35
+        i_deg = 42.0
+        orbit_class = "Hyperbolic / Interstellar"
+    else:
+        a_au = 2.65
+        e = 0.12
+        i_deg = 6.5
+        orbit_class = "Main-Belt"
+
+    k_gauss = 0.01720209895  # rad / day
+    inc = math.radians(i_deg)
+    t_days = (t_arr - (float(t_arr[0]) if t_arr.size > 0 else 0.0)) / 24.0
+
+    # Solve Kepler's equation in orbital plane around perihelion passage
+    if e < 1.0 and a_au > 0.0:
+        n_motion = k_gauss / (abs(a_au) ** 1.5)
+        M_anom = 0.15 + n_motion * t_days
+        E_anom = M_anom.copy()
+        for _ in range(8):
+            E_anom = E_anom - (E_anom - e * np.sin(E_anom) - M_anom) / (1.0 - e * np.cos(E_anom))
+        r_orb = a_au * (1.0 - e * np.cos(E_anom))
+        x_orb = a_au * (np.cos(E_anom) - e)
+        y_orb = a_au * math.sqrt(1.0 - e**2) * np.sin(E_anom)
+    else:
+        a_abs = abs(a_au)
+        n_motion = k_gauss / (a_abs ** 1.5)
+        M_hyp = 0.08 + n_motion * t_days
+        H_anom = M_hyp.copy()
+        for _ in range(10):
+            H_anom = H_anom - (e * np.sinh(H_anom) - H_anom - M_hyp) / (e * np.cosh(H_anom) - 1.0)
+        r_orb = a_abs * (e * np.cosh(H_anom) - 1.0)
+        x_orb = a_abs * (e - np.cosh(H_anom))
+        y_orb = a_abs * math.sqrt(e**2 - 1.0) * np.sinh(H_anom)
+
+    # Earth circular motion near opposition (r_E = 1 AU)
+    x_earth = np.cos(k_gauss * t_days)
+    y_earth = np.sin(k_gauss * t_days)
+
+    dx = x_orb - x_earth
+    dy = y_orb * math.cos(inc) - y_earth
+    dz = y_orb * math.sin(inc)
+    delta = np.sqrt(dx**2 + dy**2 + dz**2)
+
+    lon = np.arctan2(dy, dx)
+    lat = np.arcsin(np.clip(dz / np.maximum(delta, 1e-9), -1.0, 1.0))
+
+    dlon_deg = np.degrees(lon - lon[0]) if lon.size > 0 else np.zeros_like(t_days)
+    dlat_deg = np.degrees(lat - lat[0]) if lat.size > 0 else np.zeros_like(t_days)
+
+    cos_dec0 = max(math.cos(math.radians(float(dec0_deg))), 1e-4)
+    ra_deg_arr = float(ra0_deg) + dlon_deg / cos_dec0
+    dec_deg_arr = float(dec0_deg) + dlat_deg
+
+    epochs: list[dict] = []
+    for idx in range(len(t_arr)):
+        epochs.append(
+            {
+                "mjd": float(base_mjd) + float(t_arr[idx]) / 24.0,
+                "ra_deg": float(ra_deg_arr[idx]),
+                "dec_deg": float(dec_deg_arr[idx]),
+            }
+        )
+
+    true_elements = {
+        "a_au": float(a_au),
+        "e": float(e),
+        "i_deg": float(i_deg),
+        "orbit_class": orbit_class,
+        "r_helio_au": float(r_orb[0]) if len(r_orb) > 0 else abs(float(a_au)),
+    }
+    return epochs, true_elements
+
+
 def estimate_kepler_orbit(tracklet_epochs: Sequence[dict]) -> dict:
     """
     Estimate approximate heliocentric Keplerian orbital elements (a_au, e, i_deg,
@@ -79,18 +178,12 @@ def estimate_kepler_orbit(tracklet_epochs: Sequence[dict]) -> dict:
 
     k_gauss = 0.01720209895  # rad / day for Earth at 1 AU
 
-    # In opposition: omega_sky ≈ k * (1 - 1 / r^1.5) / (r - 1).
-    # Solve numerically on [1.05, 50.0] AU for heliocentric distance r (a_au).
-    r_grid = np.linspace(1.05, 50.0, 2000)
-    model_rate = k_gauss * (1.0 - np.power(r_grid, -1.5)) / (r_grid - 1.0)
-    idx = int(np.argmin(np.abs(model_rate - omega_sky)))
-    a_au = float(r_grid[idx])
-
     # Estimate inclination from sky velocity angle and mid-epoch declination
     vel_angle = abs(math.atan2(abs(ddec_rad_per_day), max(abs(dra_rad_per_day), 1e-9)))
     i_deg = float(np.clip(math.degrees(math.hypot(abs(dec_mid) * 0.5, vel_angle * 0.35)), 0.0, 179.9))
 
-    # Estimate non-zero small eccentricity from curvature / rate residual across 3 epochs
+    # Measure curvature / angular acceleration across 3+ epochs
+    rel_accel = 0.0
     if len(sorted_eps) >= 3:
         dt1 = max(float(ep_mid["mjd"]) - float(ep_start["mjd"]), 1e-6)
         dt2 = max(float(ep_end["mjd"]) - float(ep_mid["mjd"]), 1e-6)
@@ -99,20 +192,38 @@ def estimate_kepler_orbit(tracklet_epochs: Sequence[dict]) -> dict:
         v1 = math.hypot((ra_m - ra1) * math.cos(dec_mid) / dt1, (dec_m - dec1) / dt1)
         v2 = math.hypot((ra2 - ra_m) * math.cos(dec_mid) / dt2, (dec2 - dec_m) / dt2)
         rel_accel = abs(v2 - v1) / max(omega_sky, 1e-6)
-        e_est = float(np.clip(0.05 + 0.5 * rel_accel, 0.0, 0.95))
-    else:
-        e_est = 0.08
 
-    if a_au < 1.3:
-        orbit_class = "NEA"
-    elif a_au < 2.0:
-        orbit_class = "Mars-Crosser"
-    elif a_au <= 3.2:
-        orbit_class = "Main-Belt"
-    elif a_au <= 5.5:
-        orbit_class = "Outer-Belt / Trojan"
+    # Hyperbolic / Interstellar regime when apparent angular rate exceeds bound NEA opposition limit
+    # (~0.055 rad/day ≈ 3.15 deg/day) or exhibits strong hyperbolic excess velocity.
+    hyperbolic_rate_limit = 0.055
+    if omega_sky > hyperbolic_rate_limit:
+        excess_ratio = omega_sky / hyperbolic_rate_limit
+        e_est = float(np.clip(1.05 + 0.35 * (excess_ratio - 1.0) + 0.2 * rel_accel, 1.02, 3.5))
+        a_au = -float(np.clip(1.5 / max(e_est - 1.0, 0.08), 0.25, 10.0))
+        orbit_class = "Hyperbolic / Interstellar"
     else:
-        orbit_class = "Centaur / TNO"
+        # In opposition: omega_sky ≈ k * (1 - 1 / r^1.5) / (r - 1).
+        # Solve numerically on [1.05, 50.0] AU for heliocentric distance r (a_au).
+        r_grid = np.linspace(1.05, 50.0, 2000)
+        model_rate = k_gauss * (1.0 - np.power(r_grid, -1.5)) / (r_grid - 1.0)
+        idx = int(np.argmin(np.abs(model_rate - omega_sky)))
+        a_au = float(r_grid[idx])
+
+        if len(sorted_eps) >= 3:
+            e_est = float(np.clip(0.05 + 0.5 * rel_accel, 0.0, 0.95))
+        else:
+            e_est = 0.08
+
+        if a_au < 1.3:
+            orbit_class = "NEA"
+        elif a_au < 2.0:
+            orbit_class = "Mars-Crosser"
+        elif a_au <= 3.2:
+            orbit_class = "Main-Belt"
+        elif a_au <= 5.5:
+            orbit_class = "Outer-Belt / Trojan"
+        else:
+            orbit_class = "Centaur / TNO"
 
     return {
         "a_au": a_au,

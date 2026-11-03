@@ -4,6 +4,7 @@ import pandas as pd
 import psutil
 import streamlit as st
 import torch
+import math
 
 from astro_project.core.hardware import resolve_device
 
@@ -407,32 +408,44 @@ def _plot_solar_system_orbit(
     fig, ax = plt.subplots(figsize=(fig_w, 5.5 * scale), facecolor="#0b0f19")
     ax.set_facecolor("#0b0f19")
 
-    theta = np.linspace(0.0, 2.0 * np.pi, 360)
+    theta_circle = np.linspace(0.0, 2.0 * np.pi, 360)
+
+    def _orbit_xy(a_val: float, e_val: float) -> tuple[np.ndarray, np.ndarray]:
+        if e_val >= 1.0 or a_val < 0.0:
+            e_hyp = max(float(e_val), 1.05)
+            a_abs = max(abs(float(a_val)), 0.2)
+            max_th = math.acos(-1.0 / e_hyp) * 0.82
+            th = np.linspace(-max_th, max_th, 240)
+            r = (a_abs * (e_hyp**2 - 1.0)) / (1.0 + e_hyp * np.cos(th))
+            return r * np.cos(th), r * np.sin(th)
+        a_ell = max(float(a_val), 0.1)
+        e_ell = float(np.clip(e_val, 0.0, 0.95))
+        r = (a_ell * (1.0 - e_ell**2)) / (1.0 + e_ell * np.cos(theta_circle))
+        return r * np.cos(theta_circle), r * np.sin(theta_circle)
 
     # Monte Carlo uncertainty envelope (alpha=0.1)
     for a_mc, e_mc in zip(a_samples, e_samples):
-        a_val = float(a_mc)
-        e_val = float(np.clip(e_mc, 0.0, 0.95))
-        if a_val <= 0.0:
+        if float(a_mc) == 0.0:
             continue
-        r_mc = (a_val * (1.0 - e_val**2)) / (1.0 + e_val * np.cos(theta))
+        x_mc, y_mc = _orbit_xy(float(a_mc), float(e_mc))
         ax.plot(
-            r_mc * np.cos(theta),
-            r_mc * np.sin(theta),
+            x_mc,
+            y_mc,
             color="#38bdf8",
             alpha=0.1,
             linewidth=1.0,
         )
 
-    a_nom_val = max(float(a_nom), 0.1)
-    e_nom_val = float(np.clip(e_nom, 0.0, 0.95))
+    a_nom_val = float(a_nom) if float(a_nom) != 0.0 else 1.5
+    e_nom_val = max(float(e_nom), 0.0)
+    ref_dist_au = abs(a_nom_val) * (e_nom_val - 1.0) if (e_nom_val >= 1.0 or a_nom_val < 0.0) else max(a_nom_val, 0.1)
 
     # Select planets to display: all major planets or closest inner & outer planet
     if show_all_planets:
         selected_planets = MAJOR_PLANETS
     else:
-        inner_planets = [p for p in MAJOR_PLANETS if p["a_au"] <= a_nom_val]
-        outer_planets = [p for p in MAJOR_PLANETS if p["a_au"] > a_nom_val]
+        inner_planets = [p for p in MAJOR_PLANETS if p["a_au"] <= ref_dist_au]
+        outer_planets = [p for p in MAJOR_PLANETS if p["a_au"] > ref_dist_au]
         selected_planets = []
         if inner_planets:
             selected_planets.append(max(inner_planets, key=lambda p: p["a_au"]))
@@ -447,8 +460,8 @@ def _plot_solar_system_orbit(
         px = r_p * np.cos(lon_rad)
         py = r_p * np.sin(lon_rad)
         ax.plot(
-            r_p * np.cos(theta),
-            r_p * np.sin(theta),
+            r_p * np.cos(theta_circle),
+            r_p * np.sin(theta_circle),
             color=planet["color"],
             linestyle="--",
             linewidth=1.0,
@@ -466,10 +479,10 @@ def _plot_solar_system_orbit(
         )
 
     # Nominal candidate orbit
-    r_nom = (a_nom_val * (1.0 - e_nom_val**2)) / (1.0 + e_nom_val * np.cos(theta))
+    x_nom, y_nom = _orbit_xy(a_nom_val, e_nom_val)
     ax.plot(
-        r_nom * np.cos(theta),
-        r_nom * np.sin(theta),
+        x_nom,
+        y_nom,
         color="#ef4444",
         linewidth=2.2,
         label=f"Nominal (a={a_nom_val:.2f} AU, e={e_nom_val:.2f})",

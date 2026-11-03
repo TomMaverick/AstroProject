@@ -6,7 +6,8 @@ from astropy.io import fits
 
 from astro_project.core.fits_loader import save_fits_image
 from astro_project.core.hardware import resolve_device
-from astro_project.core.wcs_utils import create_synthetic_wcs, pix_to_world
+from astro_project.core.orbit import propagate_kepler_ephemeris
+from astro_project.core.wcs_utils import create_synthetic_wcs, pix_to_world, world_to_pix
 
 
 def generate_synthetic_sky(
@@ -62,6 +63,9 @@ def generate_demo_asteroid_series(
     randomize: bool = False,
     seed: int | None = None,
     device: Union[str, torch.device] = "cpu",
+    pixel_scale_arcsec: float = 1.0,
+    dt_hours: float = 1.0,
+    orbit_preset: str = "linear",
 ) -> tuple[list[str], list[float], dict]:
     """
     Generates a series of `n_frames` synthetic FITS images ([Y, X] convention)
@@ -114,7 +118,13 @@ def generate_demo_asteroid_series(
         x0 = float(width) * 0.52
         y0 = float(height) * 0.55
 
-    wcs = create_synthetic_wcs(pixel_scale_arcsec=1.0, crval_ra=180.0, crval_dec=45.0)
+    pixel_scale_arcsec = max(float(pixel_scale_arcsec), 0.05)
+    dt_hours = max(float(dt_hours), 0.01)
+    wcs = create_synthetic_wcs(
+        pixel_scale_arcsec=pixel_scale_arcsec,
+        crval_ra=180.0,
+        crval_dec=45.0,
+    )
 
     y_coords = torch.arange(height, dtype=torch.float32, device=device)
     x_coords = torch.arange(width, dtype=torch.float32, device=device)
@@ -158,12 +168,35 @@ def generate_demo_asteroid_series(
 
     base_mjd = 60000.0
     file_paths: list[str] = []
-    times_hours: list[float] = []
+    times_hours: list[float] = [float(i) * dt_hours for i in range(n_frames)]
+
+    preset_norm = str(orbit_preset).strip().lower()
+    true_orbit_info = None
+    if preset_norm in ("main_belt", "nea", "hyperbolic"):
+        ephem_list, true_orbit_info = propagate_kepler_ephemeris(
+            times_hours=times_hours,
+            orbit_preset=preset_norm,
+            base_mjd=base_mjd,
+            ra0_deg=float(ra0),
+            dec0_deg=float(dec0),
+        )
+        ephem_ra = [ep["ra_deg"] for ep in ephem_list]
+        ephem_dec = [ep["dec_deg"] for ep in ephem_list]
+        px_arr, py_arr = world_to_pix(wcs, ephem_ra, ephem_dec)
+        x_traj = [float(v) for v in px_arr]
+        y_traj = [float(v) for v in py_arr]
+        total_dt = max(times_hours[-1] - times_hours[0], 1e-6) if len(times_hours) > 1 else 1.0
+        vx = float((x_traj[-1] - x_traj[0]) / total_dt)
+        vy = float((y_traj[-1] - y_traj[0]) / total_dt)
+        x0 = float(x_traj[0])
+        y0 = float(y_traj[0])
+    else:
+        x_traj = [x0 + vx * t_hr for t_hr in times_hours]
+        y_traj = [y0 + vy * t_hr for t_hr in times_hours]
 
     with torch.no_grad():
         for i in range(n_frames):
-            t_hr = float(i)
-            times_hours.append(t_hr)
+            t_hr = times_hours[i]
 
             noise = torch.randn(
                 (height, width), generator=gen, dtype=torch.float32, device=device
@@ -175,8 +208,8 @@ def generate_demo_asteroid_series(
                     -((grid_y - sy) ** 2 + (grid_x - sx) ** 2) / (2.0 * sigma**2)
                 )
 
-            xi = x0 + vx * t_hr
-            yi = y0 + vy * t_hr
+            xi = x_traj[i]
+            yi = y_traj[i]
             frame += asteroid_amp * torch.exp(
                 -((grid_y - yi) ** 2 + (grid_x - xi) ** 2) / (2.0 * sigma**2)
             )
@@ -188,6 +221,8 @@ def generate_demo_asteroid_series(
             with fits.open(str(fits_path), mode="update", memmap=False) as hdul:
                 hdul[0].header["MJD-OBS"] = (mjd_obs, "Modified Julian Date of observation")
                 hdul[0].header["EXPTIME"] = (60.0, "Exposure time in seconds")
+                hdul[0].header["PIXSCALE"] = (pixel_scale_arcsec, "Pixel scale in arcsec/px")
+                hdul[0].header["ORBPRES"] = (preset_norm, "Synthetic orbit preset")
                 hdul.flush()
 
             file_paths.append(str(fits_path))
@@ -206,6 +241,10 @@ def generate_demo_asteroid_series(
         "n_stars": len(stars),
         "stars": stars,
         "randomized": bool(randomize),
+        "pixel_scale_arcsec": float(pixel_scale_arcsec),
+        "dt_hours": float(dt_hours),
+        "orbit_preset": preset_norm,
+        "true_orbit": true_orbit_info,
     }
     return file_paths, times_hours, ground_truth
 
@@ -222,6 +261,9 @@ def generate_custom_asteroid_series(
     randomize: bool = False,
     seed: int | None = None,
     device: Union[str, torch.device] = "cpu",
+    pixel_scale_arcsec: float = 1.0,
+    dt_hours: float = 1.0,
+    orbit_preset: str = "linear",
 ) -> tuple[list[str], list[float], dict]:
     """Wrapper for custom/randomized synthetic asteroid series generation."""
     return generate_demo_asteroid_series(
@@ -236,4 +278,7 @@ def generate_custom_asteroid_series(
         randomize=randomize,
         seed=seed,
         device=device,
+        pixel_scale_arcsec=pixel_scale_arcsec,
+        dt_hours=dt_hours,
+        orbit_preset=orbit_preset,
     )

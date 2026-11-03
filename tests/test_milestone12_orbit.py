@@ -8,6 +8,7 @@ from astro_project.core.orbit import (
     compute_tracklet_endpoints,
     estimate_kepler_orbit,
     format_mpc80_line,
+    propagate_kepler_ephemeris,
 )
 from astro_project.core.catalog_match import cross_match_known_objects
 
@@ -101,3 +102,29 @@ def test_mpc80_export():
     assert "K26A00A" in line[:12]
     assert line[14] == "C"
     assert line[77:80] == "500"
+
+
+def test_kepler_ephemeris_presets_and_hyperbolic_iod():
+    times_hours = [0.0, 1.0, 2.0, 3.0]
+
+    for preset in ("main_belt", "nea", "hyperbolic"):
+        epochs, true_orb = propagate_kepler_ephemeris(
+            times_hours=times_hours,
+            orbit_preset=preset,
+            base_mjd=60000.0,
+            ra0_deg=180.0,
+            dec0_deg=20.0,
+        )
+        assert len(epochs) == 4
+        est = estimate_kepler_orbit(epochs)
+        if preset == "hyperbolic":
+            assert true_orb["a_au"] < 0.0
+            assert true_orb["e"] > 1.0
+            assert est["a_au"] < 0.0
+            assert est["e"] > 1.0
+            assert "Hyperbolic" in est["orbit_class"]
+        else:
+            assert true_orb["a_au"] > 1.0
+            assert 0.0 <= true_orb["e"] < 1.0
+            assert est["a_au"] > 1.0
+            assert 0.0 <= est["e"] < 1.0

@@ -141,3 +141,21 @@ def test_generate_custom_and_randomized_asteroid_series(tmp_path, device):
     assert 20.0 <= gt_rand["x0"] <= 108.0
     assert 20.0 <= gt_rand["y0"] <= 108.0
     assert len(gt_rand["stars"]) == 7
+
+    # 3. Kepler preset + custom telescope pixel scale
+    paths_kepler, times_kepler, gt_kepler = generate_demo_asteroid_series(
+        output_dir=custom_dir,
+        n_frames=4,
+        height=128,
+        width=128,
+        pixel_scale_arcsec=2.5,
+        dt_hours=0.5,
+        orbit_preset="nea",
+        device=device,
+    )
+    assert len(paths_kepler) == 4
+    assert times_kepler == [0.0, 0.5, 1.0, 1.5]
+    assert gt_kepler["pixel_scale_arcsec"] == pytest.approx(2.5)
+    assert gt_kepler["orbit_preset"] == "nea"
+    assert gt_kepler["true_orbit"] is not None
+    assert gt_kepler["true_orbit"]["orbit_class"] == "NEA"
