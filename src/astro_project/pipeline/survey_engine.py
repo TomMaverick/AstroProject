@@ -119,7 +119,7 @@ class SurveyLedger:
         with sqlite3.connect(self.ledger_path) as conn:
             total = conn.execute("SELECT COUNT(*) FROM scanned_fields").fetchone()[0]
             purged = conn.execute(
-                "SELECT COUNT(*) FROM scanned_fields WHERE status = 'purged'"
+                "SELECT COUNT(*) FROM scanned_fields WHERE status IN ('purged', 'empty_purged')"
             ).fetchone()[0]
             silver = conn.execute(
                 "SELECT COUNT(*) FROM scanned_fields WHERE status = 'silver'"
@@ -569,7 +569,7 @@ def run_automated_survey_batch(
                     mjd_start=mjd_start,
                     mjd_end=mjd_end,
                     n_frames=n_frames,
-                    status="purged",
+                    status="empty_purged",
                     best_score=best_score,
                 )
 
