@@ -60,10 +60,26 @@ DARK_MODE_CSS = """
         background-color: #111827;
         border-right: 1px solid #1f2937;
     }
-    section[data-testid="stSidebar"] > div:first-child {
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
+    section[data-testid="stSidebar"] > div:first-child,
+    div[data-testid="stSidebarContent"],
+    div[data-testid="stSidebarUserContent"] {
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 92vh;
+    }
+    div[data-testid="stSidebarUserContent"] > div:first-child {
+        display: flex !important;
+        flex-direction: column !important;
+        flex-grow: 1 !important;
+        min-height: 88vh;
+    }
+    div[data-testid="stSidebarUserContent"] div[data-testid="stVerticalBlock"] {
+        flex-grow: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    div[data-testid="stSidebarUserContent"] div[data-testid="stElementContainer"]:has(.sidebar-statusbar-wrap) {
+        margin-top: auto !important;
     }
     .sidebar-title {
         font-size: 1.55rem;
@@ -78,7 +94,8 @@ DARK_MODE_CSS = """
     }
     .sidebar-statusbar-wrap {
         margin-top: auto;
-        padding-top: 0.5rem;
+        padding-top: 0.6rem;
+        border-top: 1px solid #1f2937;
     }
     div[data-testid="stMetric"] {
         background-color: #1e293b;
@@ -356,6 +373,11 @@ def render_sidebar_statusbar(device: torch.device):
 
 def render_sidebar_controls() -> tuple[torch.device, str]:
     """Renders main navigation buttons, the 'System & Einstellungen' modal button, and the 2x2 statusbar in the sidebar."""
+    st.sidebar.markdown(
+        "<div class='sidebar-title'>\U0001f52d AstroProject</div>",
+        unsafe_allow_html=True,
+    )
+
     cuda_available = torch.cuda.is_available()
     if cuda_available:
         torch.cuda.init()
@@ -369,10 +391,6 @@ def render_sidebar_controls() -> tuple[torch.device, str]:
     if "show_all_planets" not in st.session_state:
         st.session_state["show_all_planets"] = False
 
-    st.sidebar.markdown(
-        "<div class='sidebar-title'>\U0001f52d AstroProject</div>",
-        unsafe_allow_html=True,
-    )
     st.sidebar.markdown("### Navigation")
     nav_items = [
         "FITS-Inspector & Photometry",
@@ -412,7 +430,7 @@ def _plot_comparison_frame(
     scale_pct: float = 85.0,
     target_label: str = "Asteroid",
 ) -> plt.Figure:
-    """Erzeugt einen Dark-Mode-Plot für den Vorher/Nachher-Vergleich (Einzelbild vs. Shift-and-Stack)."""
+    """Creates a Dark-Mode plot for the before/after comparison (single frame vs. shift-and-stack)."""
     scale = max(float(scale_pct) / 100.0, 0.4)
     fig, ax = plt.subplots(figsize=(6.0 * scale, 5.0 * scale), facecolor="#0b0f19")
     ax.set_facecolor("#0b0f19")
@@ -507,7 +525,7 @@ def _plot_stamp_strip(
     times_hours_list: list[float],
     scale_pct: float = 85.0,
 ) -> plt.Figure:
-    """Rendert die 32x32 Stamps für Frame 0..N-1 sowie den Shift-and-Stack Stamp nebeneinander."""
+    """Renders the 32x32 stamps for frames 0..N-1 alongside the shift-and-stack stamp."""
     n_cols = len(frame_stamps_np) + 1
     scale = max(float(scale_pct) / 100.0, 0.4)
     fig, axes = plt.subplots(
