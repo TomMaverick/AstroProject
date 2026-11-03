@@ -211,13 +211,18 @@ def get_hardware_metrics() -> dict:
     }
 
 
-def render_sidebar_controls() -> torch.device:
-    """Rendert die Device-Auswahl (Standard: CUDA falls verf\u00fcgbar) und Cache-Steuerung in der Sidebar."""
+def render_sidebar_controls() -> tuple[torch.device, str]:
+    """Renders main navigation and the 'System & Einstellungen' expander in the sidebar."""
     cuda_available = torch.cuda.is_available()
     if cuda_available:
         torch.cuda.init()
-    with st.sidebar:
-        st.markdown("### \u2699\ufe0f Compute & VRAM Control")
+
+    nav_selection = st.sidebar.radio(
+        "Navigation",
+        ["FITS-Inspector & Photometry", "Velocity Grid Search & Orbit Analysis"],
+    )
+
+    with st.sidebar.expander("System & Einstellungen \u2699\ufe0f", expanded=False):
         options = ["cuda", "cpu"] if cuda_available else ["cpu"]
         selected_dev = st.selectbox(
             "Ziel-Device",
@@ -246,9 +251,17 @@ def render_sidebar_controls() -> torch.device:
         )
         st.session_state["plot_scale_pct"] = float(plot_scale_pct)
 
-        return resolve_device(
-            selected_dev if selected_dev == "cuda" and cuda_available else "cpu"
+        show_all_planets = st.checkbox(
+            "Alle Hauptplaneten anzeigen",
+            value=False,
+            help="Zeichnet im Sonnensystem-Plot die Umlaufbahnen und ungef\u00e4hren Positionen aller Hauptplaneten (Merkur bis Neptun) ein.",
         )
+        st.session_state["show_all_planets"] = bool(show_all_planets)
+
+    device = resolve_device(
+        selected_dev if selected_dev == "cuda" and cuda_available else "cpu"
+    )
+    return device, nav_selection
 
 
 def render_top_statusbar(device: torch.device):
@@ -407,14 +420,27 @@ def _plot_stamp_strip(
     return fig
 
 
+MAJOR_PLANETS = [
+    {"name": "Mercury", "a_au": 0.39, "lon_deg": 252.0, "color": "#9ca3af"},
+    {"name": "Venus", "a_au": 0.72, "lon_deg": 181.0, "color": "#fde047"},
+    {"name": "Earth", "a_au": 1.00, "lon_deg": 100.0, "color": "#38bdf8"},
+    {"name": "Mars", "a_au": 1.52, "lon_deg": 355.0, "color": "#fb7185"},
+    {"name": "Jupiter", "a_au": 5.20, "lon_deg": 34.0, "color": "#fb923c"},
+    {"name": "Saturn", "a_au": 9.58, "lon_deg": 50.0, "color": "#fcd34d"},
+    {"name": "Uranus", "a_au": 19.20, "lon_deg": 314.0, "color": "#22d3ee"},
+    {"name": "Neptune", "a_au": 30.05, "lon_deg": 304.0, "color": "#818cf8"},
+]
+
+
 def _plot_solar_system_orbit(
     a_nom: float,
     e_nom: float,
     a_samples: list[float] | np.ndarray,
     e_samples: list[float] | np.ndarray,
     scale_pct: float = 85.0,
+    show_all_planets: bool = False,
 ) -> plt.Figure:
-    """Creates a top-down ecliptic Dark-Mode plot of the nominal orbit and Monte Carlo uncertainty envelope."""
+    """Creates a top-down ecliptic Dark-Mode plot of the nominal orbit, planets, and MC uncertainty envelope."""
     scale = max(float(scale_pct) / 100.0, 0.4)
     fig, ax = plt.subplots(figsize=(6.0 * scale, 5.5 * scale), facecolor="#0b0f19")
     ax.set_facecolor("#0b0f19")
@@ -436,19 +462,48 @@ def _plot_solar_system_orbit(
             linewidth=1.0,
         )
 
-    # Earth orbit at 1 AU
-    ax.plot(
-        np.cos(theta),
-        np.sin(theta),
-        color="#94a3b8",
-        linestyle="--",
-        linewidth=1.3,
-        label="Earth Orbit (1.0 AU)",
-    )
-
-    # Nominal candidate orbit
     a_nom_val = max(float(a_nom), 0.1)
     e_nom_val = float(np.clip(e_nom, 0.0, 0.95))
+
+    # Select planets to display: all major planets or closest inner & outer planet
+    if show_all_planets:
+        selected_planets = MAJOR_PLANETS
+    else:
+        inner_planets = [p for p in MAJOR_PLANETS if p["a_au"] <= a_nom_val]
+        outer_planets = [p for p in MAJOR_PLANETS if p["a_au"] > a_nom_val]
+        selected_planets = []
+        if inner_planets:
+            selected_planets.append(max(inner_planets, key=lambda p: p["a_au"]))
+        if outer_planets:
+            selected_planets.append(min(outer_planets, key=lambda p: p["a_au"]))
+        if not selected_planets:
+            selected_planets = [MAJOR_PLANETS[2]]
+
+    for planet in selected_planets:
+        r_p = float(planet["a_au"])
+        lon_rad = np.deg2rad(float(planet["lon_deg"]))
+        px = r_p * np.cos(lon_rad)
+        py = r_p * np.sin(lon_rad)
+        ax.plot(
+            r_p * np.cos(theta),
+            r_p * np.sin(theta),
+            color=planet["color"],
+            linestyle="--",
+            linewidth=1.1,
+            alpha=0.75,
+            label=f"{planet['name']} ({r_p:.2f} AU)",
+        )
+        ax.scatter(
+            [px],
+            [py],
+            color=planet["color"],
+            s=45,
+            zorder=4,
+            edgecolors="#0b0f19",
+            linewidths=0.8,
+        )
+
+    # Nominal candidate orbit
     r_nom = (a_nom_val * (1.0 - e_nom_val**2)) / (1.0 + e_nom_val * np.cos(theta))
     ax.plot(
         r_nom * np.cos(theta),
@@ -1011,6 +1066,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                     a_samples=a_samples,
                     e_samples=e_samples,
                     scale_pct=st.session_state.get("plot_scale_pct", 85.0),
+                    show_all_planets=bool(st.session_state.get("show_all_planets", False)),
                 )
                 st.pyplot(fig_orbit, use_container_width=True)
                 plt.close(fig_orbit)
@@ -1026,7 +1082,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
 def main():
     st.set_page_config(page_title="AstroProject", page_icon="*", layout="wide")
     st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
-    device = render_sidebar_controls()
+    device, nav_selection = render_sidebar_controls()
 
     st.markdown(
         "<h1 style='text-align: center; margin-bottom: 0.3rem;'>AstroProject</h1>",
@@ -1034,15 +1090,9 @@ def main():
     )
     render_top_statusbar(device)
 
-    tabs = st.tabs(
-        [
-            "\U0001f52d FITS-Inspector & Photometry",
-            "\U0001f680 Velocity Grid Search & Orbit Analysis",
-        ]
-    )
-    with tabs[0]:
+    if nav_selection == "FITS-Inspector & Photometry":
         render_tab_fits_inspector(device)
-    with tabs[1]:
+    else:
         render_tab_pipeline_grid_search(device)
 
 
