@@ -84,11 +84,21 @@ def render_tab_pipeline_grid_search(device: torch.device):
                 help="W\u00e4hlt zwischen linearer Pixelbewegung oder physikalischer 2-K\u00f6rper-Kepler-Ephemeride (Main-Belt, NEA, Hyperbolisch).",
             )
             selected_orbit_preset = orbit_preset_options[selected_orbit_label]
+        
+        kepler_preset_defaults = {
+            "linear": {"dt_hours": 1.0, "n_frames": 5, "tel_idx": 0},
+            "main_belt": {"dt_hours": 0.5, "n_frames": 6, "tel_idx": 2},
+            "nea": {"dt_hours": 0.25, "n_frames": 6, "tel_idx": 3},
+            "hyperbolic": {"dt_hours": 0.25, "n_frames": 5, "tel_idx": 3},
+        }
+        preset_cfg = kepler_preset_defaults.get(
+            selected_orbit_preset, kepler_preset_defaults["linear"]
+        )
         with preset_col2:
             selected_tel_label = st.selectbox(
                 "Teleskop-Aufl\u00f6sung (Pixel-Skala)",
                 options=list(telescope_scale_options.keys()),
-                index=0,
+                index=int(preset_cfg["tel_idx"]),
                 help="WCS-Abbildungsma\u00dfstab in Bogensekunden pro Pixel (CDELT).",
             )
             selected_pixel_scale = float(telescope_scale_options[selected_tel_label])
@@ -97,7 +107,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                 "Zeitabstand dt [h / Frame]",
                 min_value=0.25,
                 max_value=6.0,
-                value=1.0,
+                value=float(preset_cfg["dt_hours"]),
                 step=0.25,
                 help="Zeitliche Differenz in Stunden zwischen zwei aufeinanderfolgenden Aufnahmen.",
             )
@@ -138,7 +148,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                 "Anzahl Frames",
                 min_value=3,
                 max_value=15,
-                value=5,
+                value=int(preset_cfg["n_frames"]),
                 step=1,
                 disabled=bool(rand_frames),
                 help="Anzahl der zeitlich aufeinanderfolgenden FITS-Aufnahmen in data/series_demo/.",
@@ -180,6 +190,31 @@ def render_tab_pipeline_grid_search(device: torch.device):
                 step=0.1,
                 disabled=bool(rand_snr),
                 help="Signal-zu-Rausch-Verh\u00e4ltnis des Asteroiden pro Einzelaufnahme.",
+            )
+
+        total_time_h = max(int(custom_n_frames) - 1, 1) * float(custom_dt_hours)
+        if selected_orbit_preset == "linear":
+            est_speed_px_h = float(np.hypot(custom_vx, custom_vy))
+        else:
+            approx_sky_rates_arcsec_h = {
+                "main_belt": 32.0,
+                "nea": 95.0,
+                "hyperbolic": 140.0,
+            }
+            sky_rate = approx_sky_rates_arcsec_h.get(selected_orbit_preset, 40.0)
+            est_speed_px_h = sky_rate / max(float(selected_pixel_scale), 0.1)
+        est_total_shift_px = est_speed_px_h * total_time_h
+        if est_total_shift_px > 128.0:
+            st.caption(
+                f"\u26a0\ufe0f **Physikalischer Hinweis:** Die gesch\u00e4tzte Gesamtverschiebung "
+                f"(\u2248 {est_total_shift_px:.1f} px \u00fcber {total_time_h:.2f} h) \u00fcberschreitet das "
+                f"128\u00d7128 Pixel Canvas. Bitte `dt`, `Anzahl Frames` reduzieren oder eine gr\u00f6\u00dfere "
+                f"Pixel-Skala w\u00e4hlen, damit das Objekt im Bildfeld bleibt."
+            )
+        else:
+            st.caption(
+                f"\u2139\ufe0f Gesch\u00e4tzte Gesamtbewegung im 128\u00d7128 Canvas: "
+                f"\u2248 {est_total_shift_px:.1f} px ({est_speed_px_h:.2f} px/h \u00fcber {total_time_h:.2f} h)."
             )
 
         if st.button("\U0001f680 Serie generieren", use_container_width=True):
@@ -510,11 +545,12 @@ def render_tab_pipeline_grid_search(device: torch.device):
 
             st.markdown("#### \U0001f9ed Nachbarfeld-Tracking & Stellarium RemoteControl")
             tr_col1, tr_col2, tr_col3 = st.columns(3)
+            t_exit_h = float(exit_info["t_exit_hours"])
             tr_col1.metric("Austritts-Kante", str(exit_info["exit_edge"]).upper())
             tr_col2.metric(
                 "Zeit bis Feldaustritt",
-                f"{exit_info['time_to_exit_hours']:.2f} h"
-                if np.isfinite(exit_info["time_to_exit_hours"])
+                f"{t_exit_h:.2f} h"
+                if np.isfinite(t_exit_h)
                 else "\u221e (Station\u00e4r)",
             )
             tr_col3.metric(
