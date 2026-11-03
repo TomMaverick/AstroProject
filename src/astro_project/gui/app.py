@@ -78,6 +78,8 @@ DARK_MODE_CSS = """
         display: flex;
         justify-content: space-between;
         align-items: center;
+        width: 100%;
+        box-sizing: border-box;
         height: 34px;
         padding: 0 14px;
         background: linear-gradient(90deg, #111827 0%, #1e293b 100%);
@@ -250,29 +252,17 @@ def render_sidebar_controls() -> torch.device:
 
 
 def render_top_statusbar(device: torch.device):
-    """Rendert die ultra-kompakte ~1cm (34px) horizontale Statusbar via st.columns ganz oben im Hauptbereich."""
+    """Rendert die ultra-kompakte ~1cm (34px) horizontale Statusbar ueber volle Breite ganz oben im Hauptbereich."""
     metrics = get_hardware_metrics()
-    c_cpu, c_ram, c_vram, c_dev = st.columns(4)
-    with c_cpu:
-        st.markdown(
-            f"<div class='top-statusbar'><span>\u26a1 <b>CPU:</b> {metrics['cpu_percent']:.1f}%</span></div>",
-            unsafe_allow_html=True,
-        )
-    with c_ram:
-        st.markdown(
-            f"<div class='top-statusbar'><span>\U0001f9e0 <b>RAM:</b> {metrics['ram_percent']:.1f}% ({metrics['ram_used_gb']:.1f}/{metrics['ram_total_gb']:.0f} GB)</span></div>",
-            unsafe_allow_html=True,
-        )
-    with c_vram:
-        st.markdown(
-            f"<div class='top-statusbar'><span>\U0001f3ae <b>RTX 4070 VRAM:</b> {metrics['vram_used_gb']:.2f} / {metrics['vram_total_gb']:.2f} GB</span></div>",
-            unsafe_allow_html=True,
-        )
-    with c_dev:
-        st.markdown(
-            f"<div class='top-statusbar'><span>\U0001f3af <b>Device:</b> <code class='status-badge'>{device.type.upper()}</code></span></div>",
-            unsafe_allow_html=True,
-        )
+    st.markdown(
+        f"<div class='top-statusbar'>"
+        f"<span>\u26a1 <b>CPU:</b> {metrics['cpu_percent']:.1f}%</span>"
+        f"<span>\U0001f9e0 <b>RAM:</b> {metrics['ram_percent']:.1f}% ({metrics['ram_used_gb']:.1f}/{metrics['ram_total_gb']:.0f} GB)</span>"
+        f"<span>\U0001f3ae <b>RTX 4070 VRAM:</b> {metrics['vram_used_gb']:.2f} / {metrics['vram_total_gb']:.2f} GB</span>"
+        f"<span>\U0001f3af <b>Device:</b> <code class='status-badge'>{device.type.upper()}</code></span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _plot_comparison_frame(
@@ -635,19 +625,19 @@ def render_tab_fits_inspector(device: torch.device):
         with p_col1:
             fig_raw = _plot_inspector_frame(
                 raw_np,
-                f"Raw Image [{height}×{width}]",
+                f"Raw Image [{height}\u00d7{width}]",
                 scale_pct=st.session_state.get("plot_scale_pct", 85.0),
             )
-            st.pyplot(fig_raw, width="stretch")
+            st.pyplot(fig_raw, use_container_width=True)
             plt.close(fig_raw)
         with p_col2:
             fig_res = _plot_inspector_frame(
                 res_np,
-                f"Background Subtracted + DAOStarFinder ({sigma_thresh:.1f}σ, FWHM={fwhm_val:.1f})",
+                f"Background Subtracted + DAOStarFinder ({sigma_thresh:.1f}\u03c3, FWHM={fwhm_val:.1f})",
                 sources_df=sources_df,
                 scale_pct=st.session_state.get("plot_scale_pct", 85.0),
             )
-            st.pyplot(fig_res, width="stretch")
+            st.pyplot(fig_res, use_container_width=True)
             plt.close(fig_res)
 
         st.markdown("#### \U0001f4cb Detected Sources Catalog")
@@ -939,7 +929,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                         target_xy=target_xy,
                         scale_pct=st.session_state.get("plot_scale_pct", 85.0),
                     )
-                    st.pyplot(fig_raw, width="stretch")
+                    st.pyplot(fig_raw, use_container_width=True)
                     plt.close(fig_raw)
                 with p_col2:
                     fig_shifted = _plot_comparison_frame(
@@ -948,7 +938,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                         target_xy=target_xy,
                         scale_pct=st.session_state.get("plot_scale_pct", 85.0),
                     )
-                    st.pyplot(fig_shifted, width="stretch")
+                    st.pyplot(fig_shifted, use_container_width=True)
                     plt.close(fig_shifted)
 
                 if len(raw_frames_np) > 0 and target_xy is not None:
@@ -970,7 +960,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                         times_hours_list=times_hours.detach().cpu().tolist(),
                         scale_pct=st.session_state.get("plot_scale_pct", 85.0),
                     )
-                    st.pyplot(fig_stamps, width="stretch")
+                    st.pyplot(fig_stamps, use_container_width=True)
                     plt.close(fig_stamps)
                 st.markdown("#### \U0001fa90 Orbit Estimation & Stellarium Integration")
                 orbit_wcs = ref_wcs if ref_wcs is not None else create_synthetic_wcs()
@@ -1022,7 +1012,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                     e_samples=e_samples,
                     scale_pct=st.session_state.get("plot_scale_pct", 85.0),
                 )
-                st.pyplot(fig_orbit, width="stretch")
+                st.pyplot(fig_orbit, use_container_width=True)
                 plt.close(fig_orbit)
             else:
                 st.warning("Keine Kandidaten erkannt.")
@@ -1035,12 +1025,13 @@ def render_tab_pipeline_grid_search(device: torch.device):
 
 def main():
     st.set_page_config(page_title="AstroProject", page_icon="*", layout="wide")
+    st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
+    device = render_sidebar_controls()
+
     st.markdown(
-        "<h1 style='text-align: center;'>AstroProject</h1>",
+        "<h1 style='text-align: center; margin-bottom: 0.3rem;'>AstroProject</h1>",
         unsafe_allow_html=True,
     )
-
-    device = render_sidebar_controls()
     render_top_statusbar(device)
 
     tabs = st.tabs(
