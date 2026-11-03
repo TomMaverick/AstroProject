@@ -144,12 +144,16 @@ def compute_discovery_score(
     Compute a 0..100 discovery score with temporal coherence gating to reject single-frame
     cosmic rays and hotpixels.
     """
-    stamps_arr = np.asarray(frame_stamps, dtype=np.float32)
+    stamps_arr = np.asarray(frame_stamps, dtype=np.float32).copy()
     if stamps_arr.ndim == 3 and stamps_arr.shape[0] > 0:
         _, h, w = stamps_arr.shape
         cy, cx = h // 2, w // 2
         y0, y1 = max(0, cy - 2), min(h, cy + 3)
         x0, x1 = max(0, cx - 2), min(w, cx + 3)
+        
+        for i in range(stamps_arr.shape[0]):
+            stamps_arr[i] -= float(np.median(stamps_arr[i]))
+            
         frame_fluxes = np.mean(stamps_arr[:, y0:y1, x0:x1], axis=(1, 2))
         pos_fluxes = np.maximum(frame_fluxes, 0.0)
         median_flux = float(np.median(pos_fluxes))
