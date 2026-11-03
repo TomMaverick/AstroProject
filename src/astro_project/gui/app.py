@@ -125,6 +125,21 @@ DARK_MODE_CSS = """
         color: #f8fafc !important;
         box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.7) !important;
     }
+    section[data-testid="stSidebar"] button[kind="primary"] {
+        background-color: #3b0764 !important;
+        border: 1px solid #7e22ce !important;
+        color: #f8fafc !important;
+        font-weight: 600 !important;
+    }
+    section[data-testid="stSidebar"] button[kind="primary"]:hover {
+        background-color: #4c1d95 !important;
+        border-color: #a855f7 !important;
+    }
+    section[data-testid="stSidebar"] button[kind="secondary"] {
+        background-color: #1e293b !important;
+        border: 1px solid #334155 !important;
+        color: #cbd5e1 !important;
+    }
 </style>
 """
 
@@ -154,6 +169,55 @@ def show_parameter_help_dialog():
         * **Stellarium Live-Slew:** Zentriert die virtuelle Kamera in Stellarium \u00fcber das RemoteControl-Plugin (`http://localhost:8090/api`) direkt auf die Kandidaten-Koordinate.
         """
     )
+
+@st.dialog("System & Einstellungen \u2699\ufe0f")
+def show_system_settings_dialog():
+    """Modal window for Compute & VRAM Control, Plot Scaling, and Orbit Plot settings."""
+    cuda_available = torch.cuda.is_available()
+    if cuda_available:
+        torch.cuda.init()
+
+    st.markdown("#### Compute & VRAM Control")
+    options = ["cuda", "cpu"] if cuda_available else ["cpu"]
+    current_dev = st.session_state.get("selected_dev", options[0])
+    if current_dev not in options:
+        current_dev = options[0]
+
+    selected_dev = st.selectbox(
+        "Ziel-Device",
+        options=options,
+        index=options.index(current_dev),
+        help="W\u00e4hlt das PyTorch-Device f\u00fcr [Y, X] Tensor-Operationen (CUDA Standard auf RTX 4070).",
+    )
+    st.session_state["selected_dev"] = selected_dev
+
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        if st.button("\U0001f504 Refresh", use_container_width=True):
+            st.rerun()
+    with col_btn2:
+        if st.button("\U0001f9f9 VRAM Flush", use_container_width=True):
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            st.rerun()
+
+    st.markdown("---")
+    plot_scale_pct = st.slider(
+        "\U0001f50d Plot-Gr\u00f6\u00dfe [%]",
+        min_value=50,
+        max_value=100,
+        value=int(st.session_state.get("plot_scale_pct", 85)),
+        step=5,
+        help="Skaliert die Darstellungsgr\u00f6\u00dfe (figsize) aller Matplotlib-Plots dynamisch f\u00fcr optimales Rein-/Rauszoomen.",
+    )
+    st.session_state["plot_scale_pct"] = float(plot_scale_pct)
+
+    show_all_planets = st.checkbox(
+        "Alle Hauptplaneten anzeigen",
+        value=bool(st.session_state.get("show_all_planets", False)),
+        help="Zeichnet im Sonnensystem-Plot die Umlaufbahnen und ungef\u00e4hren Positionen aller Hauptplaneten (Merkur bis Neptun) ein.",
+    )
+    st.session_state["show_all_planets"] = bool(show_all_planets)
 
 
 def get_hardware_metrics() -> dict:
@@ -212,56 +276,49 @@ def get_hardware_metrics() -> dict:
 
 
 def render_sidebar_controls() -> tuple[torch.device, str]:
-    """Renders main navigation and the 'System & Einstellungen' expander in the sidebar."""
+    """Renders main navigation buttons and the 'System & Einstellungen' modal button in the sidebar."""
     cuda_available = torch.cuda.is_available()
     if cuda_available:
         torch.cuda.init()
 
-    nav_selection = st.sidebar.radio(
-        "Navigation",
-        ["FITS-Inspector & Photometry", "Velocity Grid Search & Orbit Analysis"],
-    )
+    if "nav_selection" not in st.session_state:
+        st.session_state["nav_selection"] = "FITS-Inspector & Photometry"
+    if "selected_dev" not in st.session_state:
+        st.session_state["selected_dev"] = "cuda" if cuda_available else "cpu"
+    if "plot_scale_pct" not in st.session_state:
+        st.session_state["plot_scale_pct"] = 85.0
+    if "show_all_planets" not in st.session_state:
+        st.session_state["show_all_planets"] = False
 
-    with st.sidebar.expander("System & Einstellungen \u2699\ufe0f", expanded=False):
-        options = ["cuda", "cpu"] if cuda_available else ["cpu"]
-        selected_dev = st.selectbox(
-            "Ziel-Device",
-            options=options,
-            index=0,
-            help="W\u00e4hlt das PyTorch-Device f\u00fcr [Y, X] Tensor-Operationen (CUDA Standard auf RTX 4070).",
-        )
+    st.sidebar.markdown("### Navigation")
+    nav_items = [
+        "FITS-Inspector & Photometry",
+        "Velocity Grid Search & Orbit Analysis",
+    ]
+    for item in nav_items:
+        is_active = st.session_state["nav_selection"] == item
+        if st.sidebar.button(
+            item,
+            key=f"nav_btn_{item}",
+            type="primary" if is_active else "secondary",
+            use_container_width=True,
+        ):
+            st.session_state["nav_selection"] = item
+            st.rerun()
 
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1:
-            if st.button("\U0001f504 Refresh", width="stretch"):
-                st.rerun()
-        with col_btn2:
-            if st.button("\U0001f9f9 VRAM Flush", width="stretch"):
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                st.rerun()
+    st.sidebar.markdown("---")
+    if st.sidebar.button(
+        "System & Einstellungen \u2699\ufe0f",
+        key="open_settings_modal_btn",
+        use_container_width=True,
+    ):
+        show_system_settings_dialog()
 
-        plot_scale_pct = st.slider(
-            "\U0001f50d Plot-Gr\u00f6\u00dfe [%]",
-            min_value=50,
-            max_value=100,
-            value=85,
-            step=5,
-            help="Skaliert die Darstellungsgr\u00f6\u00dfe (figsize) aller Matplotlib-Plots dynamisch f\u00fcr optimales Rein-/Rauszoomen.",
-        )
-        st.session_state["plot_scale_pct"] = float(plot_scale_pct)
-
-        show_all_planets = st.checkbox(
-            "Alle Hauptplaneten anzeigen",
-            value=False,
-            help="Zeichnet im Sonnensystem-Plot die Umlaufbahnen und ungef\u00e4hren Positionen aller Hauptplaneten (Merkur bis Neptun) ein.",
-        )
-        st.session_state["show_all_planets"] = bool(show_all_planets)
-
+    selected_dev = st.session_state.get("selected_dev", "cuda" if cuda_available else "cpu")
     device = resolve_device(
         selected_dev if selected_dev == "cuda" and cuda_available else "cpu"
     )
-    return device, nav_selection
+    return device, st.session_state["nav_selection"]
 
 
 def render_top_statusbar(device: torch.device):
@@ -554,7 +611,7 @@ def render_tab_fits_inspector(device: torch.device):
     with hdr_col1:
         st.subheader("\U0001f52d FITS-Inspector & Photometry")
     with hdr_col2:
-        if st.button("\u2753 Parameter-Hilfe \u00f6ffnen", key="help_btn_tab1", width="stretch"):
+        if st.button("\u2753 Parameter-Hilfe \u00f6ffnen", key="help_btn_tab1", use_container_width=True):
             show_parameter_help_dialog()
 
     data_dir = Path("data")
@@ -639,7 +696,7 @@ def render_tab_fits_inspector(device: torch.device):
 
     try:
         with torch.no_grad():
-            image_t, wcs, header = load_fits_image(target_fits_path, device=device)
+            image_t, wcs, header = load_fits_image(target_fits_path, device=device, nan_fill=None)
             bkg_t = estimate_background(image_t)
             residual_t = image_t - bkg_t
 
@@ -735,7 +792,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
     with hdr_col1:
         st.subheader("\U0001f680 Velocity Grid Search & Orbit Analysis")
     with hdr_col2:
-        if st.button("\u2753 Parameter-Hilfe \u00f6ffnen", key="help_btn_tab2", width="stretch"):
+        if st.button("\u2753 Parameter-Hilfe \u00f6ffnen", key="help_btn_tab2", use_container_width=True):
             show_parameter_help_dialog()
 
     series_demo_dir = Path("data/series_demo")
@@ -813,7 +870,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                 "Im Zufalls-Modus werden SNR, Geschwindigkeiten, Sterne und Position automatisch vom Algorithmus variiert."
             )
 
-        if st.button("\U0001f680 Serie generieren", width="stretch"):
+        if st.button("\U0001f680 Serie generieren", use_container_width=True):
             try:
                 with torch.no_grad():
                     paths, times, gt = generate_demo_asteroid_series(
@@ -877,7 +934,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
         help="Absoluter Schwellenwert in ADU über dem Hintergrund im gestackten Summenbild für die DAOStarFinder-Quellendetektion.",
     )
 
-    run_clicked = st.button("\U0001f680 GPU-Grid-Search & Pipeline ausf\u00fchren", width="stretch")
+    run_clicked = st.button("\U0001f680 GPU-Grid-Search & Pipeline ausf\u00fchren", use_container_width=True)
 
     if run_clicked:
         if len(fits_files) == 0:
@@ -900,7 +957,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                     cleaned_frames_np = []
                     ref_wcs = None
                     for idx, fpath in enumerate(fits_files):
-                        img_t, wcs_obj, hdr = load_fits_image(fpath, device=device)
+                        img_t, wcs_obj, hdr = load_fits_image(fpath, device=device, nan_fill=None)
                         if ref_wcs is None and wcs_obj is not None and wcs_obj.is_celestial:
                             ref_wcs = wcs_obj
                         raw_frames_np.append(img_t.detach().cpu().numpy())
