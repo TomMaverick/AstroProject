@@ -1,1 +1,13 @@
-# Empty package file to make `astro_project.gui` a recognized Python module.
+from . import app
+from . import components
+from . import styles
+from . import tabs_inspector
+from . import tabs_pipeline
+
+__all__ = [
+    "app",
+    "components",
+    "styles",
+    "tabs_inspector",
+    "tabs_pipeline",
+]
