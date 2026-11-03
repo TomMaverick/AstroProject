@@ -170,7 +170,7 @@ def compute_discovery_score(
         bg_mad = float(np.median(np.abs(outer_vals - np.median(outer_vals))))
         bg_std = 1.4826 * bg_mad
 
-        frame_fluxes = np.mean(stamps_arr[:, y0:y1, x0:x1], axis=(1, 2))
+        frame_fluxes = np.mean(stamps_arr[:, py0:py1, px0:px1], axis=(1, 2))
         frame_peaks = np.max(stamps_arr[:, py0:py1, px0:px1], axis=(1, 2))
         pos_fluxes = np.maximum(frame_fluxes, 0.0)
         median_flux = float(np.median(pos_fluxes))
@@ -180,9 +180,7 @@ def compute_discovery_score(
 
         stack_outer = stack_arr[outer_mask]
         stack_bg_med = float(np.median(stack_outer))
-        stack_net_peak = float(np.max(stack_arr[py0:py1, px0:px1]) - stack_bg_med)
-        if stack_net_peak < float(detection_threshold):
-            is_noise_fluctuation = True
+        stack_net_peak = float(np.max(stack_arr[y0:y1, x0:x1]) - stack_bg_med)
 
         if bg_std > 1e-4:
             stack_bg_std = max(
@@ -191,14 +189,14 @@ def compute_discovery_score(
             )
             stack_snr = stack_net_peak / max(stack_bg_std, 1e-6)
 
-            active_fraction = float(np.mean(frame_peaks > 1.8 * bg_std))
+            active_fraction = float(np.mean(frame_peaks > 1.2 * bg_std))
             median_frame_snr = float(np.median(frame_peaks) / max(bg_std, 1e-6))
 
             if (
-                stack_snr < 5.0
+                stack_snr < 4.2
                 or active_fraction < 0.6
-                or median_frame_snr < 2.0
-                or mean_flux < 0.5 * bg_std
+                or median_frame_snr < 1.4
+                or mean_flux < 0.25 * bg_std
             ):
                 is_noise_fluctuation = True
                 coherence *= 0.25
@@ -209,7 +207,7 @@ def compute_discovery_score(
     cnn_prob = float(candidate_row.get("cnn_score", 0.5))
 
     snr_ratio = peak_val / max(float(detection_threshold), 1e-6)
-    if snr_ratio < 1.25:
+    if snr_ratio < 1.05:
         is_noise_fluctuation = True
 
     snr_score = float(np.clip(snr_ratio * 17.5, 0.0, 35.0))
@@ -373,6 +371,10 @@ def run_automated_survey_batch(
             det_thresh = (
                 float(stack_detection_sigma) * (noise_std / np.sqrt(max(n_frames, 1)))
             )
+            pipeline_det_thresh = (
+                max(float(stack_detection_sigma), 4.2)
+                * (noise_std / np.sqrt(max(n_frames, 1)))
+            )
 
             ref_wcs = wcs_list[0] if wcs_list[0] is not None else create_synthetic_wcs()
             if vx_range is None or vy_range is None:
@@ -395,7 +397,7 @@ def run_automated_survey_batch(
                 vx_range=use_vx,
                 vy_range=use_vy,
                 steps=int(steps),
-                detection_threshold=det_thresh,
+                detection_threshold=pipeline_det_thresh,
                 cnn_model=cnn_model,
                 device=resolved_dev,
                 star_mask_threshold=star_mask_thresh,
