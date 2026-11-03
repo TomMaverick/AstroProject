@@ -126,30 +126,30 @@ DARK_MODE_CSS = """
 </style>
 """
 
-@st.dialog("❓ AstroProject — Parameter- & Physik-Handbuch", width="large")
+@st.dialog("\u2753 AstroProject \u2014 Parameter- & Physik-Handbuch", width="large")
 def show_parameter_help_dialog():
-    """Schließbares Dark-Mode-Modal-Fenster mit Erklärungen zu allen Parametern aus Tab 1 und Tab 2."""
+    """Schlie\u00dfbares Dark-Mode-Modal-Fenster mit Erkl\u00e4rungen zu allen Parametern."""
     st.markdown(
         """
-        ### 🔭 Tab 1: FITS-Inspector & Photometrie
-        * **FITS Data Source:** Wählt die Bildquelle aus dem lokalen Ordner `data/`, dem integrierten Astropy-Beispielbild (`HorseHead.fits`) oder einem eigenen Datei-Upload.
-        * **Detection Threshold (σ über Hintergrund):** Bestimmt, ab welchem Vielfachen des Hintergrundrauschens ($1\\sigma$) eine Punktquelle durch `DAOStarFinder` als Stern/Objekt akzeptiert wird. Niedrigere Werte finden schwächere Quellen, erhöhen aber Falschdetektionen.
-        * **DAOStarFinder FWHM [px]:** Erwartete Halbwertsbreite (Full Width at Half Maximum) der teleskopischen Punktspreizfunktion (PSF) in Pixeln für den Gauß-Matched-Filter.
+        ### \ud83d\udd2d FITS-Inspector & Photometry
+        * **FITS Data Source:** W\u00e4hlt die Bildquelle aus dem lokalen Ordner `data/`, dem integrierten Astropy-Beispielbild (`HorseHead.fits`) oder einem eigenen Datei-Upload.
+        * **Detection Threshold (\u03c3 \u00fcber Hintergrund):** Bestimmt, ab welchem Vielfachen des Hintergrundrauschens ($1\\sigma$) eine Punktquelle durch `DAOStarFinder` als Stern/Objekt akzeptiert wird. Niedrigere Werte finden schw\u00e4chere Quellen, erh\u00f6hen aber Falschdetektionen.
+        * **DAOStarFinder FWHM [px]:** Erwartete Halbwertsbreite (Full Width at Half Maximum) der teleskopischen Punktspreizfunktion (PSF) in Pixeln f\u00fcr den Gau\u00df-Matched-Filter.
 
         ---
-        ### 🚀 Tab 2: GPU Shift-and-Stack Pipeline & Velocity Grid Search
-        * **Pipeline-Datenquelle:** Wählt zwischen der synthetischen 5-Frame-Demo (`data/series_demo/`) und realen FITS-Sequenzen in `data/`.
+        ### \ud83d\ude80 Velocity Grid Search & Orbit Analysis
+        * **Pipeline-Datenquelle:** W\u00e4hlt zwischen der synthetischen Demo (`data/series_demo/`) und realen FITS-Sequenzen in `data/`.
         * **vx / vy Suchbereich Min & Max [px/h]:** Definiert den Geschwindigkeitsraum in Pixeln pro Stunde entlang der $[Y, X]$-Bildachsen (`vx` in X-Richtung, `vy` in Y-Richtung), der auf der GPU abgetastet wird.
-        * **Grid-Schritte (`grid_steps`):** Anzahl der Stützstellen pro Geschwindigkeitsachse. Ein Wert von $N$ erzeugt ein $N \\times N$ Trajektorien-Gitter.
+        * **Grid-Schritte (`grid_steps`):** Anzahl der St\u00fctzstellen pro Geschwindigkeitsachse. Ein Wert von $N$ erzeugt ein $N \\times N$ Trajektorien-Gitter.
         * **RealBogusCNN Score-Schwelle (`cnn_threshold`):** Mindest-Klassifikationswahrscheinlichkeit $[0.0, 1.0]$ des 3-Kanal-CNNs (Mean, Median, Variance), ab der ein gestackter Kandidat als echtes bewegtes Objekt (`Real`) eingestuft wird.
-        * **DAOStarFinder Detektions-Schwelle [ADU über Hintergrund]:** Absoluter Schwellenwert im Shift-and-Stack-Summenbild. Da das Signal-zu-Rausch-Verhältnis beim Stacking mit $\\sqrt{N_{\\text{Frames}}}$ wächst, treten hier zuvor unsichtbare Sub-Sigma-Asteroiden deutlich hervor.
-        * **🎞️ Frame-Navigator & Spur-Overlay:** Erlaubt das Durchblättern der Einzelbilder $0 \\dots N-1$ (Rohbild vs. sternmaskiertes Bild) im direkten Vergleich zum Shift-and-Stack-Summenbild.
+        * **DAOStarFinder Detektions-Schwelle [ADU \u00fcber Hintergrund]:** Absoluter Schwellenwert im Shift-and-Stack-Summenbild. Da das Signal-zu-Rausch-Verh\u00e4ltnis beim Stacking mit $\\sqrt{N_{\\text{Frames}}}$ w\u00e4chst, treten hier zuvor unsichtbare Sub-Sigma-Asteroiden deutlich hervor.
+        * **\ud83c\udf9e\ufe0f Frame-Navigator & Spur-Overlay:** Erlaubt das Durchbl\u00e4ttern der Einzelbilder $0 \\dots N-1$ (Rohbild vs. sternmaskiertes Bild) im direkten Vergleich zum Shift-and-Stack-Summenbild.
 
         ---
-        ### 🪐 Meilenstein 12 & 13: Orbit, MPC-80 & Stellarium
-        * **Väisälä-Kepler-Orbit:** Schätzt aus der kurzen Winkelgeschwindigkeit am Himmel die große Halbachse $a\\,[\\text{AU}]$, Exzentrizität $e$, Inklination $i\\,[^\\circ]$ und die Orbit-Klasse (z.B. Main-Belt, NEA).
-        * **Nachbarfeld-Tracking:** Berechnet Zeitpunkt und Himmelskoordinate, an denen das Objekt den aktuellen Sensorbereich $[0, W] \\times [0, H]$ verlässt.
-        * **Stellarium Live-Slew:** Zentriert die virtuelle Kamera in Stellarium über das RemoteControl-Plugin (`http://localhost:8090/api`) direkt auf die Kandidaten-Koordinate.
+        ### \ud83e\ude90 Orbit Estimation & Stellarium Integration
+        * **V\u00e4is\u00e4l\u00e4-Kepler-Orbit:** Sch\u00e4tzt aus der kurzen Winkelgeschwindigkeit am Himmel die gro\u00dfe Halbachse $a\\,[\\text{AU}]$, Exzentrizit\u00e4t $e$, Inklination $i\\,[^\\circ]$ und die Orbit-Klasse (z.B. Main-Belt, NEA).
+        * **Nachbarfeld-Tracking:** Berechnet Zeitpunkt und Himmelskoordinate, an denen das Objekt den aktuellen Sensorbereich $[0, W] \\times [0, H]$ verl\u00e4sst.
+        * **Stellarium Live-Slew:** Zentriert die virtuelle Kamera in Stellarium \u00fcber das RemoteControl-Plugin (`http://localhost:8090/api`) direkt auf die Kandidaten-Koordinate.
         """
     )
 
@@ -210,37 +210,37 @@ def get_hardware_metrics() -> dict:
 
 
 def render_sidebar_controls() -> torch.device:
-    """Rendert die Device-Auswahl (Standard: CUDA falls verfügbar) und Cache-Steuerung in der Sidebar."""
+    """Rendert die Device-Auswahl (Standard: CUDA falls verf\u00fcgbar) und Cache-Steuerung in der Sidebar."""
     cuda_available = torch.cuda.is_available()
     if cuda_available:
         torch.cuda.init()
     with st.sidebar:
-        st.markdown("### ⚙️ Compute & VRAM Control")
+        st.markdown("### \u2699\ufe0f Compute & VRAM Control")
         options = ["cuda", "cpu"] if cuda_available else ["cpu"]
         selected_dev = st.selectbox(
             "Ziel-Device",
             options=options,
             index=0,
-            help="Wählt das PyTorch-Device für [Y, X] Tensor-Operationen (CUDA Standard auf RTX 4070).",
+            help="W\u00e4hlt das PyTorch-Device f\u00fcr [Y, X] Tensor-Operationen (CUDA Standard auf RTX 4070).",
         )
 
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
-            if st.button("🔄 Refresh", width="stretch"):
+            if st.button("\ud83d\udd04 Refresh", width="stretch"):
                 st.rerun()
         with col_btn2:
-            if st.button("🧹 VRAM Flush", width="stretch"):
+            if st.button("\ud83e\uddf9 VRAM Flush", width="stretch"):
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 st.rerun()
 
         plot_scale_pct = st.slider(
-            "🔍 Plot-Größe [%]",
+            "\ud83d\udd0d Plot-Gr\u00f6\u00dfe [%]",
             min_value=50,
             max_value=100,
             value=85,
             step=5,
-            help="Skaliert die Darstellungsgröße (figsize) aller Matplotlib-Plots dynamisch für optimales Rein-/Rauszoomen.",
+            help="Skaliert die Darstellungsgr\u00f6\u00dfe (figsize) aller Matplotlib-Plots dynamisch f\u00fcr optimales Rein-/Rauszoomen.",
         )
         st.session_state["plot_scale_pct"] = float(plot_scale_pct)
 
@@ -255,22 +255,22 @@ def render_top_statusbar(device: torch.device):
     c_cpu, c_ram, c_vram, c_dev = st.columns(4)
     with c_cpu:
         st.markdown(
-            f"<div class='top-statusbar'><span>⚡ <b>CPU:</b> {metrics['cpu_percent']:.1f}%</span></div>",
+            f"<div class='top-statusbar'><span>\u26a1 <b>CPU:</b> {metrics['cpu_percent']:.1f}%</span></div>",
             unsafe_allow_html=True,
         )
     with c_ram:
         st.markdown(
-            f"<div class='top-statusbar'><span>🧠 <b>RAM:</b> {metrics['ram_percent']:.1f}% ({metrics['ram_used_gb']:.1f}/{metrics['ram_total_gb']:.0f} GB)</span></div>",
+            f"<div class='top-statusbar'><span>\ud83e\udde0 <b>RAM:</b> {metrics['ram_percent']:.1f}% ({metrics['ram_used_gb']:.1f}/{metrics['ram_total_gb']:.0f} GB)</span></div>",
             unsafe_allow_html=True,
         )
     with c_vram:
         st.markdown(
-            f"<div class='top-statusbar'><span>🎮 <b>RTX 4070 VRAM:</b> {metrics['vram_used_gb']:.2f} / {metrics['vram_total_gb']:.2f} GB</span></div>",
+            f"<div class='top-statusbar'><span>\ud83c\udfae <b>RTX 4070 VRAM:</b> {metrics['vram_used_gb']:.2f} / {metrics['vram_total_gb']:.2f} GB</span></div>",
             unsafe_allow_html=True,
         )
     with c_dev:
         st.markdown(
-            f"<div class='top-statusbar'><span>🎯 <b>Device:</b> <code class='status-badge'>{device.type.upper()}</code></span></div>",
+            f"<div class='top-statusbar'><span>\ud83c\udfaf <b>Device:</b> <code class='status-badge'>{device.type.upper()}</code></span></div>",
             unsafe_allow_html=True,
         )
 
@@ -418,12 +418,12 @@ def _plot_stamp_strip(
 
 
 def render_tab_fits_inspector(device: torch.device):
-    """Tab 1: FITS-Inspector & Photometrie"""
+    """FITS-Inspector & Photometry"""
     hdr_col1, hdr_col2 = st.columns([3, 1])
     with hdr_col1:
-        st.subheader("🔭 FITS-Inspector & Photometrie")
+        st.subheader("\ud83d\udd2d FITS-Inspector & Photometry")
     with hdr_col2:
-        if st.button("❓ Parameter-Hilfe öffnen", key="help_btn_tab1", width="stretch"):
+        if st.button("\u2753 Parameter-Hilfe \u00f6ffnen", key="help_btn_tab1", width="stretch"):
             show_parameter_help_dialog()
 
     data_dir = Path("data")
@@ -564,7 +564,7 @@ def render_tab_fits_inspector(device: torch.device):
             st.pyplot(fig_res, width="stretch")
             plt.close(fig_res)
 
-        st.markdown("#### 📋 Detected Sources Catalog")
+        st.markdown("#### \ud83d\udccb Detected Sources Catalog")
         if sources_df is not None and len(sources_df) > 0:
             st.dataframe(sources_df, width="stretch", height=280)
         else:
@@ -572,7 +572,7 @@ def render_tab_fits_inspector(device: torch.device):
                 "No sources detected above the selected threshold. Try lowering the Detection Threshold slider."
             )
 
-        with st.expander("📄 FITS Header Metadata"):
+        with st.expander("\ud83d\udcc4 FITS Header Metadata"):
             if header is not None:
                 hdr_rows = [
                     {
@@ -599,12 +599,12 @@ def render_tab_fits_inspector(device: torch.device):
 
 
 def render_tab_pipeline_grid_search(device: torch.device):
-    """Tab 2: GPU Shift-and-Stack Pipeline & Velocity Grid Search"""
+    """Velocity Grid Search & Orbit Analysis"""
     hdr_col1, hdr_col2 = st.columns([3, 1])
     with hdr_col1:
-        st.subheader("🚀 GPU Shift-and-Stack Pipeline & Velocity Grid Search")
+        st.subheader("\ud83d\ude80 Velocity Grid Search & Orbit Analysis")
     with hdr_col2:
-        if st.button("❓ Parameter-Hilfe öffnen", key="help_btn_tab2", width="stretch"):
+        if st.button("\u2753 Parameter-Hilfe \u00f6ffnen", key="help_btn_tab2", width="stretch"):
             show_parameter_help_dialog()
 
     series_demo_dir = Path("data/series_demo")
@@ -612,48 +612,18 @@ def render_tab_pipeline_grid_search(device: torch.device):
     series_demo_dir.mkdir(parents=True, exist_ok=True)
     default_data_dir.mkdir(parents=True, exist_ok=True)
 
-    col_src, col_btn = st.columns([2, 2])
-    with col_src:
-        selected_folder = st.radio(
-            "Pipeline-Datenquelle wählen",
-            options=["data/series_demo/", "data/"],
-            horizontal=True,
-            help="Wählt den Quellordner für die FITS-Zeitreihe: Synthetische 5-Frame-Demo oder reale Beobachtungsdaten in data/.",
-        )
-    with col_btn:
-        if st.button(
-            "☄️ Synthetische 5-Frame Asteroiden-Serie erzeugen (Low-SNR Demo)",
-            width="stretch",
-        ):
-            try:
-                with torch.no_grad():
-                    paths, times, gt = generate_demo_asteroid_series(
-                        output_dir="data/series_demo",
-                        n_frames=5,
-                        height=128,
-                        width=128,
-                        vx=2.0,
-                        vy=-1.0,
-                        asteroid_snr=1.5,
-                        n_stars=5,
-                        randomize=False,
-                        device=device,
-                    )
-                    st.session_state["demo_gt"] = gt
-                    st.session_state.pop("pipeline_result", None)
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                st.success(
-                    f"5-Frame FITS-Serie erfolgreich in `data/series_demo` erzeugt (Ground-Truth: vx={gt['vx']:.2f} px/h, vy={gt['vy']:.2f} px/h, SNR={gt['asteroid_snr']:.2f}, Start=({gt['x0']:.1f}, {gt['y0']:.1f}))."
-                )
-            except Exception as exc:
-                st.error(f"Fehler beim Erzeugen der 5-Frame-Serie: {exc}")
+    selected_folder = st.radio(
+        "Pipeline-Datenquelle w\u00e4hlen",
+        options=["data/series_demo/", "data/"],
+        horizontal=True,
+        help="W\u00e4hlt den Quellordner f\u00fcr die FITS-Zeitreihe: Synthetische Demo-Serie oder reale Beobachtungsdaten in data/.",
+    )
 
-    with st.expander("⚙️ Erweiterte Parameter für synthetische Serie", expanded=False):
+    with st.expander("\u2699\ufe0f Parameter fuer synthetische Bildserie (Low-SNR)", expanded=False):
         randomize_series = st.checkbox(
-            "🎲 Parameter zufällig generieren (Randomize)",
+            "\ud83c\udfb2 Parameter zufaellig generieren",
             value=False,
-            help="Zieht Anzahl Frames (3–15), Geschwindigkeiten vx/vy, Asteroiden-SNR und Startposition (x0, y0) zufällig.",
+            help="Zieht Anzahl Frames (3\u201315), Geschwindigkeiten vx/vy, Asteroiden-SNR und Startposition (x0, y0) zuf\u00e4llig.",
         )
         if not randomize_series:
             cfg_c1, cfg_c2, cfg_c3 = st.columns(3)
@@ -672,7 +642,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
                     max_value=10,
                     value=5,
                     step=1,
-                    help="Anzahl der hellen stationären Hintergrundsterne im Bildfeld.",
+                    help="Anzahl der hellen station\u00e4ren Hintergrundsterne im Bildfeld.",
                 )
             with cfg_c2:
                 custom_vx = st.slider(
@@ -698,19 +668,21 @@ def render_tab_pipeline_grid_search(device: torch.device):
                     max_value=5.0,
                     value=1.5,
                     step=0.1,
-                    help="Signal-zu-Rausch-Verhältnis des Asteroiden pro Einzelaufnahme.",
+                    help="Signal-zu-Rausch-Verh\u00e4ltnis des Asteroiden pro Einzelaufnahme.",
                 )
         else:
-            st.caption(
-                "Im Zufalls-Modus werden `n_frames` (3–15), `vx` & `vy` (-3 bis +3 px/h), `asteroid_snr` (1.0–5.0) und `(x0, y0)` automatisch ausgewürfelt."
+            custom_n_frames, custom_vx, custom_vy, custom_snr, custom_n_stars = (
+                5,
+                2.0,
+                -1.0,
+                1.5,
+                5,
             )
-            custom_n_frames = 5
-            custom_vx = 2.0
-            custom_vy = -1.0
-            custom_snr = 1.5
-            custom_n_stars = 5
+            st.caption(
+                "Im Zufalls-Modus werden SNR, Geschwindigkeiten, Sterne und Position automatisch vom Algorithmus variiert."
+            )
 
-        if st.button("🚀 Serie mit diesen Parametern generieren", width="stretch"):
+        if st.button("\ud83d\ude80 Serie generieren", width="stretch"):
             try:
                 with torch.no_grad():
                     paths, times, gt = generate_demo_asteroid_series(
@@ -736,7 +708,16 @@ def render_tab_pipeline_grid_search(device: torch.device):
                     f"Start=({gt['x0']:.1f}, {gt['y0']:.1f}))."
                 )
             except Exception as exc:
-                st.error(f"Fehler beim Generieren der benutzerdefinierten Serie: {exc}")
+                st.error(f"Fehler beim Generieren der synthetischen Serie: {exc}")
+
+    folder_path = Path(selected_folder)
+    fits_files = sorted(
+        [
+            str(p)
+            for p in folder_path.glob("*")
+            if p.is_file() and p.suffix.lower() in (".fits", ".fit", ".fts")
+        ]
+    )
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -765,12 +746,12 @@ def render_tab_pipeline_grid_search(device: torch.device):
         help="Absoluter Schwellenwert in ADU über dem Hintergrund im gestackten Summenbild für die DAOStarFinder-Quellendetektion.",
     )
 
-    run_clicked = st.button("🚀 GPU-Grid-Search & Pipeline ausführen", width="stretch")
+    run_clicked = st.button("\ud83d\ude80 GPU-Grid-Search & Pipeline ausf\u00fchren", width="stretch")
 
     if run_clicked:
         if len(fits_files) == 0:
             st.warning(
-                f"Keine FITS-Dateien in `{selected_folder}` gefunden. Bitte zuerst oben auf '☄️ Synthetische 5-Frame Asteroiden-Serie erzeugen (Low-SNR Demo)' klicken."
+                f"Keine FITS-Dateien in `{selected_folder}` gefunden. Bitte zuerst oben im Expander auf '\ud83d\ude80 Serie generieren' klicken."
             )
             return
 
@@ -823,7 +804,9 @@ def render_tab_pipeline_grid_search(device: torch.device):
                     )
 
                     frame0_np = raw_frames_np[0]
-                    frames_stack_t = torch.stack([torch.from_numpy(f) for f in cleaned_frames_np], dim=0)
+                    frames_stack_t = torch.stack(
+                        [torch.from_numpy(f) for f in cleaned_frames_np], dim=0
+                    ).to(device)
 
                     if len(catalog) > 0:
                         catalog.sort("peak", reverse=True)
@@ -839,10 +822,9 @@ def render_tab_pipeline_grid_search(device: torch.device):
 
                     shifted_stack_t = kinematic_shift_and_stack(
                         frames_stack_t,
+                        times_hours=times_hours,
                         vx=best_vx,
                         vy=best_vy,
-                        times_hours=times_hours,
-                        device=device,
                     )
 
             if torch.cuda.is_available():
@@ -852,14 +834,14 @@ def render_tab_pipeline_grid_search(device: torch.device):
 
             # Display results
             if len(catalog) > 0:
-                st.markdown("#### 📋 Erkannte Kandidaten")
+                st.markdown("#### \ud83d\udccb Erkannte Kandidaten")
                 st.dataframe(catalog.to_pandas(), width="stretch", height=280)
 
-                # Display best candidate
                 best_candidate = catalog[0]
-                st.markdown(f"### 🌌 Bester Kandidat: vx={best_vx:.2f} px/h, vy={best_vy:.2f} px/h")
+                st.markdown(
+                    f"### \ud83c\udf0c Bester Kandidat: vx={best_vx:.2f} px/h, vy={best_vy:.2f} px/h"
+                )
 
-                # Display raw and shifted stack
                 p_col1, p_col2 = st.columns(2)
                 with p_col1:
                     fig_raw = _plot_comparison_frame(
@@ -880,17 +862,28 @@ def render_tab_pipeline_grid_search(device: torch.device):
                     st.pyplot(fig_shifted, width="stretch")
                     plt.close(fig_shifted)
 
-                # Display stamps
-                if len(raw_frames_np) > 0:
-                    st.markdown("#### 📸 Stamps")
+                if len(raw_frames_np) > 0 and target_xy is not None:
+                    st.markdown("#### \ud83d\udcf8 Stamps")
+                    frame_stamps_list = [
+                        extract_stamps(
+                            torch.from_numpy(frame), [target_xy], stamp_size=32
+                        )[0, 0].numpy()
+                        for frame in raw_frames_np
+                    ]
+                    stack_stamp_np = (
+                        extract_stamps(
+                            shifted_stack_t.detach().cpu(), [target_xy], stamp_size=32
+                        )[0, 0].numpy()
+                    )
                     fig_stamps = _plot_stamp_strip(
-                        [frame[best_candidate["y_centroid"] - 16:best_candidate["y_centroid"] + 16, best_candidate["x_centroid"] - 16:best_candidate["x_centroid"] + 16] for frame in raw_frames_np],
-                        shifted_stack_t[best_candidate["y_centroid"] - 16:best_candidate["y_centroid"] + 16, best_candidate["x_centroid"] - 16:best_candidate["x_centroid"] + 16].detach().cpu().numpy(),
-                        times_hours=times_hours,
+                        frame_stamps_list,
+                        stack_stamp_np,
+                        times_hours_list=times_hours.detach().cpu().tolist(),
                         scale_pct=st.session_state.get("plot_scale_pct", 85.0),
                     )
                     st.pyplot(fig_stamps, width="stretch")
                     plt.close(fig_stamps)
+                st.markdown("#### \ud83e\ude90 Orbit Estimation & Stellarium Integration")
             else:
                 st.warning("Keine Kandidaten erkannt.")
 
@@ -901,7 +894,7 @@ def render_tab_pipeline_grid_search(device: torch.device):
 
 
 def main():
-    st.set_page_config(page_title="AstroProject", page_icon="🔭", layout="wide")
+    st.set_page_config(page_title="AstroProject", page_icon="\ud83d\udd2d", layout="wide")
     st.markdown(
         "<h1 style='text-align: center;'>AstroProject</h1>",
         unsafe_allow_html=True,
@@ -910,7 +903,12 @@ def main():
     device = render_sidebar_controls()
     render_top_statusbar(device)
 
-    tabs = st.tabs(["FITS-Inspector", "Pipeline"])
+    tabs = st.tabs(
+        [
+            "\ud83d\udd2d FITS-Inspector & Photometry",
+            "\ud83d\ude80 Velocity Grid Search & Orbit Analysis",
+        ]
+    )
     with tabs[0]:
         render_tab_fits_inspector(device)
     with tabs[1]:
