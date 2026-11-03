@@ -9,6 +9,47 @@ from astro_project.core.hardware import resolve_device
 from astro_project.core.wcs_utils import create_synthetic_wcs, pix_to_world
 
 
+def generate_synthetic_sky(
+    n_frames: int,
+    height: int,
+    width: int,
+    x0: float,
+    y0: float,
+    vx: float,
+    vy: float,
+    flux: float = 1000.0,
+    sigma: float = 2.0,
+    noise_std: float = 10.0,
+    device: Union[str, torch.device] = "cpu",
+) -> torch.Tensor:
+    """
+    Generate a synthetic sequence of 2D sky frames [N, Y, X] containing a moving
+    2D Gaussian point source (asteroid) and optional Gaussian background noise.
+    """
+    device = resolve_device(device)
+    with torch.no_grad():
+        y_coords = torch.arange(height, dtype=torch.float32, device=device)
+        x_coords = torch.arange(width, dtype=torch.float32, device=device)
+        grid_y, grid_x = torch.meshgrid(y_coords, x_coords, indexing="ij")
+
+        t = torch.arange(n_frames, dtype=torch.float32, device=device).view(-1, 1, 1)
+        xt = float(x0) + float(vx) * t
+        yt = float(y0) + float(vy) * t
+
+        dy = grid_y.unsqueeze(0) - yt
+        dx = grid_x.unsqueeze(0) - xt
+
+        norm = float(flux) / (2.0 * math.pi * (float(sigma) ** 2))
+        signal = norm * torch.exp(-(dx**2 + dy**2) / (2.0 * (float(sigma) ** 2)))
+
+        if noise_std > 0.0:
+            noise = torch.randn(
+                (n_frames, height, width), dtype=torch.float32, device=device
+            ) * float(noise_std)
+            return signal + noise
+        return signal
+
+
 def generate_demo_asteroid_series(
     output_dir: Union[str, Path],
     n_frames: int = 5,

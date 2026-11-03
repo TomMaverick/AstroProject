@@ -4,7 +4,7 @@ import astropy.units as u
 from astropy.coordinates import SkyCoord
 
 from astro_project.core.fits_loader import load_fits_image
-from astro_project.core.synthetic import generate_demo_asteroid_series
+from astro_project.core.synthetic import generate_demo_asteroid_series, generate_synthetic_sky
 from astro_project.pipeline.orchestration import run_pipeline
 
 
@@ -38,7 +38,7 @@ def test_generate_demo_asteroid_series_and_pipeline_detection(tmp_path, device):
         device=device,
     )
 
-    # 1. Prüfe Anzahl der geschriebenen Dateien, Zeiten und Ground-Truth-Struktur
+    # 1. Verify number of written files, timestamps, and ground-truth structure
     assert len(file_paths) == n_frames
     assert len(times_hours) == n_frames
     assert times_hours == sorted(times_hours)
@@ -46,7 +46,7 @@ def test_generate_demo_asteroid_series_and_pipeline_detection(tmp_path, device):
     assert "x0" in gt and "y0" in gt and "ra0" in gt and "dec0" in gt
     assert len(gt["stars"]) == 5
 
-    # 2. Prüfe FITS-Header (MJD-OBS, WCS) und dass statische Feldsterne an festen [Y, X] Positionen liegen
+    # 2. Verify FITS headers (MJD-OBS, WCS) and static field stars at fixed [Y, X] coordinates
     mjd_values = []
     star_y0, star_x0 = int(round(gt["stars"][0][0])), int(round(gt["stars"][0][1]))
     for path in file_paths:
@@ -55,13 +55,13 @@ def test_generate_demo_asteroid_series_and_pipeline_detection(tmp_path, device):
         assert wcs.is_celestial is True
         assert "MJD-OBS" in header
         mjd_values.append(float(header["MJD-OBS"]))
-        # Statischer Feldstern ist an derselben [Y, X] Position in jedem Frame deutlich über Hintergrund (~100)
+        # Static field star stays at the exact same [Y, X] position well above background (~100)
         assert tensor[star_y0, star_x0].item() > 500.0
 
     assert mjd_values == sorted(mjd_values)
     assert len(set(mjd_values)) == n_frames
 
-    # 3. Verifiziere, dass `run_pipeline` den schwachen bewegten Asteroiden über die Serie zuverlässig findet
+    # 3. Verify that `run_pipeline` reliably detects the faint moving asteroid across the series
     times_tensor = torch.tensor(times_hours, dtype=torch.float32, device=device)
     catalog = run_pipeline(
         file_paths=file_paths,
