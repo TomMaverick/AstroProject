@@ -417,6 +417,92 @@ def _plot_stamp_strip(
     return fig
 
 
+def _plot_solar_system_orbit(
+    a_nom: float,
+    e_nom: float,
+    a_samples: list[float] | np.ndarray,
+    e_samples: list[float] | np.ndarray,
+    scale_pct: float = 85.0,
+) -> plt.Figure:
+    """Creates a top-down ecliptic Dark-Mode plot of the nominal orbit and Monte Carlo uncertainty envelope."""
+    scale = max(float(scale_pct) / 100.0, 0.4)
+    fig, ax = plt.subplots(figsize=(6.0 * scale, 5.5 * scale), facecolor="#0b0f19")
+    ax.set_facecolor("#0b0f19")
+
+    theta = np.linspace(0.0, 2.0 * np.pi, 360)
+
+    # Monte Carlo uncertainty envelope (alpha=0.1)
+    for a_mc, e_mc in zip(a_samples, e_samples):
+        a_val = float(a_mc)
+        e_val = float(np.clip(e_mc, 0.0, 0.95))
+        if a_val <= 0.0:
+            continue
+        r_mc = (a_val * (1.0 - e_val**2)) / (1.0 + e_val * np.cos(theta))
+        ax.plot(
+            r_mc * np.cos(theta),
+            r_mc * np.sin(theta),
+            color="#38bdf8",
+            alpha=0.1,
+            linewidth=1.0,
+        )
+
+    # Earth orbit at 1 AU
+    ax.plot(
+        np.cos(theta),
+        np.sin(theta),
+        color="#94a3b8",
+        linestyle="--",
+        linewidth=1.3,
+        label="Earth Orbit (1.0 AU)",
+    )
+
+    # Nominal candidate orbit
+    a_nom_val = max(float(a_nom), 0.1)
+    e_nom_val = float(np.clip(e_nom, 0.0, 0.95))
+    r_nom = (a_nom_val * (1.0 - e_nom_val**2)) / (1.0 + e_nom_val * np.cos(theta))
+    ax.plot(
+        r_nom * np.cos(theta),
+        r_nom * np.sin(theta),
+        color="#ef4444",
+        linewidth=2.2,
+        label=f"Nominal Orbit (a={a_nom_val:.2f} AU, e={e_nom_val:.2f})",
+    )
+
+    # Sun at (0, 0)
+    ax.scatter(
+        [0.0],
+        [0.0],
+        color="#facc15",
+        s=130,
+        zorder=5,
+        edgecolors="#fef08a",
+        label="Sun (0, 0)",
+    )
+
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_title(
+        "Ecliptic Top-Down Orbit & MC Error Envelope",
+        color="#f8fafc",
+        fontsize=11,
+    )
+    ax.set_xlabel("X [AU]", color="#94a3b8")
+    ax.set_ylabel("Y [AU]", color="#94a3b8")
+    ax.tick_params(colors="#94a3b8")
+    ax.grid(True, color="#1e293b", linestyle=":", linewidth=0.8)
+    for spine in ax.spines.values():
+        spine.set_color("#334155")
+
+    ax.legend(
+        loc="upper right",
+        facecolor="#1e293b",
+        edgecolor="#334155",
+        labelcolor="#f8fafc",
+        fontsize=8,
+    )
+    fig.tight_layout()
+    return fig
+
+
 def render_tab_fits_inspector(device: torch.device):
     """FITS-Inspector & Photometry"""
     hdr_col1, hdr_col2 = st.columns([3, 1])
@@ -767,8 +853,11 @@ def render_tab_pipeline_grid_search(device: torch.device):
                     mjd_days_list = []
                     raw_frames_np = []
                     cleaned_frames_np = []
+                    ref_wcs = None
                     for idx, fpath in enumerate(fits_files):
                         img_t, wcs_obj, hdr = load_fits_image(fpath, device=device)
+                        if ref_wcs is None and wcs_obj is not None and wcs_obj.is_celestial:
+                            ref_wcs = wcs_obj
                         raw_frames_np.append(img_t.detach().cpu().numpy())
                         if hdr is not None and "MJD-OBS" in hdr:
                             mjd_days_list.append(float(hdr["MJD-OBS"]))
@@ -884,6 +973,57 @@ def render_tab_pipeline_grid_search(device: torch.device):
                     st.pyplot(fig_stamps, width="stretch")
                     plt.close(fig_stamps)
                 st.markdown("#### \ud83e\ude90 Orbit Estimation & Stellarium Integration")
+                orbit_wcs = ref_wcs if ref_wcs is not None else create_synthetic_wcs()
+                times_list = times_hours.detach().cpu().tolist()
+                base_mjd = mjd_days_list[0] if len(mjd_days_list) > 0 else 60000.0
+
+                nom_epochs = compute_tracklet_endpoints(
+                    wcs=orbit_wcs,
+                    x0=target_xy[0],
+                    y0=target_xy[1],
+                    vx=best_vx,
+                    vy=best_vy,
+                    times_hours=times_list,
+                    base_mjd=base_mjd,
+                )
+                nom_orbit = estimate_kepler_orbit(nom_epochs)
+
+                rng = np.random.default_rng(42)
+                a_samples: list[float] = []
+                e_samples: list[float] = []
+                span_h = max(float(times_list[-1] - times_list[0]), 0.25) if len(times_list) > 1 else 1.0
+                for _ in range(40):
+                    dx0, dy0 = rng.normal(0.0, 0.35, size=2)
+                    dvx, dvy = rng.normal(0.0, 0.25 / span_h, size=2)
+                    mc_epochs = compute_tracklet_endpoints(
+                        wcs=orbit_wcs,
+                        x0=target_xy[0] + float(dx0),
+                        y0=target_xy[1] + float(dy0),
+                        vx=best_vx + float(dvx),
+                        vy=best_vy + float(dvy),
+                        times_hours=times_list,
+                        base_mjd=base_mjd,
+                    )
+                    mc_orb = estimate_kepler_orbit(mc_epochs)
+                    a_samples.append(float(mc_orb["a_au"]))
+                    e_samples.append(float(mc_orb["e"]))
+
+                o_col1, o_col2, o_col3, o_col4 = st.columns(4)
+                o_col1.metric("Semi-major Axis a", f"{nom_orbit['a_au']:.2f} AU")
+                o_col2.metric("Eccentricity e", f"{nom_orbit['e']:.2f}")
+                o_col3.metric("Inclination i", f"{nom_orbit['i_deg']:.1f}\u00b0")
+                o_col4.metric("Orbit Class", str(nom_orbit["orbit_class"]))
+
+                st.markdown("#### \ud83c\udf1e Solar System Orbit & Monte-Carlo Uncertainty")
+                fig_orbit = _plot_solar_system_orbit(
+                    a_nom=float(nom_orbit["a_au"]),
+                    e_nom=float(nom_orbit["e"]),
+                    a_samples=a_samples,
+                    e_samples=e_samples,
+                    scale_pct=st.session_state.get("plot_scale_pct", 85.0),
+                )
+                st.pyplot(fig_orbit, width="stretch")
+                plt.close(fig_orbit)
             else:
                 st.warning("Keine Kandidaten erkannt.")
 
