@@ -192,7 +192,6 @@ def generate_or_fetch_survey_fields(
                 orbit_preset="linear",
                 dt_hours=dt_hours,
                 pixel_scale_arcsec=pix_scale,
-                base_mjd=60000.0 + idx * 0.5,
             )
 
             # Shift RA/Dec per field in FITS headers so each field has a distinct sky hash
