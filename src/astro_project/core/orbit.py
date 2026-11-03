@@ -194,8 +194,8 @@ def estimate_kepler_orbit(tracklet_epochs: Sequence[dict]) -> dict:
         rel_accel = abs(v2 - v1) / max(omega_sky, 1e-6)
 
     # Hyperbolic / Interstellar regime when apparent angular rate exceeds bound NEA opposition limit
-    # (~0.055 rad/day ≈ 3.15 deg/day) or exhibits strong hyperbolic excess velocity.
-    hyperbolic_rate_limit = 0.055
+    # (~0.03 rad/day) or exhibits strong hyperbolic excess velocity.
+    hyperbolic_rate_limit = 0.03
     if omega_sky > hyperbolic_rate_limit:
         excess_ratio = omega_sky / hyperbolic_rate_limit
         e_est = float(np.clip(1.05 + 0.35 * (excess_ratio - 1.0) + 0.2 * rel_accel, 1.02, 3.5))
