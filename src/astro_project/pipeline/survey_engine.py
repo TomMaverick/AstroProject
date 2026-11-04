@@ -317,9 +317,13 @@ def run_automated_survey_batch(
         for batch in field_batches:
             field_id = str(batch.get("field_id", "unknown_field"))
             telescope = str(batch.get("telescope", "ZTF_Palomar_48in"))
+            data_src = str(batch.get("data_source_type", "unknown"))
             file_paths = [str(p) for p in batch.get("file_paths", []) if Path(p).is_file()]
-            if not file_paths:
-                skipped_cached += 1
+            
+            if len(file_paths) < 2:
+                if auto_purge:
+                    _purge_files(file_paths)
+                empty_purged += 1
                 continue
 
             frames_list: list[torch.Tensor] = []
@@ -352,6 +356,9 @@ def run_automated_survey_batch(
                 mjd_start=mjd_start,
                 mjd_end=mjd_end,
             )
+            
+            if data_src == "real":
+                field_id = f"mjd_{int(mjd_start)}_{telescope.lower()}_{field_hash}"
 
             if ledger.is_scanned(field_hash):
                 skipped_cached += 1
@@ -463,7 +470,7 @@ def run_automated_survey_batch(
                         times_hours=times_list,
                         base_mjd=mjd_start,
                     )
-                    orbit_info = estimate_kepler_orbit(epochs)
+                    orbit_info = estimate_kepler_orbit(epochs) if len(epochs) >= 2 else {}
                     score_info = compute_discovery_score(
                         candidate_row={"peak": peak_val, "cnn_score": cnn_prob},
                         frame_stamps=frame_stamps_np,
@@ -516,7 +523,7 @@ def run_automated_survey_batch(
 
             tier_label = "gold" if best_cand["score"] >= 75.0 else "silver"
             tier_folder = "gold_tier" if tier_label == "gold" else "silver_tier"
-            dest_dir = base_path / "candidates" / tier_folder / field_id
+            dest_dir = base_path / "candidates" / tier_folder / data_src / telescope.lower() / field_id
             dest_dir.mkdir(parents=True, exist_ok=True)
 
             np.savez_compressed(
@@ -583,7 +590,6 @@ def run_automated_survey_batch(
         "skipped_cached": skipped_cached,
         "empty_purged": empty_purged,
         "gold_saved": gold_saved,
-        "gold_Saved": gold_saved,
         "silver_saved": silver_saved,
         "candidates_list": candidates_list,
         "ledger_stats": ledger.get_summary_stats(),
