@@ -42,6 +42,13 @@ def render_survey_tab(device: str | torch.device):
     else:
         ztf_ra = ztf_dec = ztf_mjd_start = ztf_mjd_end = None
 
+    with st.expander("Teleskop-Leitfaden & Empfehlungen \U0001f52d"):
+        st.markdown(
+            "- **ZTF Palomar 48-inch**: Weitfeld-Survey, hohe Kadenz (High-Cadence). Ideal fuer die Entdeckung von Near-Earth Asteroids (NEAs) und schnellen Transienten.\n"
+            "- **Pan-STARRS PS1**: Hohe Aufloesung (High-Resolution), tiefe Aufnahmen. Perfekt fuer praezise Astrometrie und schwache Objekte im aeusseren Sonnensystem.\n"
+            "- **Catalina CSS Schmidt**: Klassisches Weitfeld mit groeberer Pixelskala. Bewaehrt fuer grossflaechige Himmelsdurchmusterungen."
+        )
+
     col_cfg1, col_cfg2, col_cfg3 = st.columns(3)
     with col_cfg1:
         telescope = st.selectbox(
