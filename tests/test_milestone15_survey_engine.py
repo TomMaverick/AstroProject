@@ -136,7 +136,7 @@ def test_automated_survey_batch_tiered_storage_and_auto_purge(tmp_path: Path, de
         height=96,
         width=96,
         active_field_indices=[1],
-        asteroid_snr=12.0,
+        asteroid_snr=15.0,
         vx=2.0,
         vy=-1.0,
         seed=42,
@@ -150,7 +150,7 @@ def test_automated_survey_batch_tiered_storage_and_auto_purge(tmp_path: Path, de
     assert field_empty["ground_truth"]["asteroid_snr"] == 0.0
     assert field_empty["ground_truth"]["asteroid_amp"] == 0.0
     assert field_active["has_ground_truth"]
-    assert field_active["ground_truth"]["asteroid_snr"] == 12.0
+    assert field_active["ground_truth"]["asteroid_snr"] == 15.0
 
     summary = run_automated_survey_batch(
         field_batches=field_batches,
