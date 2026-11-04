@@ -1,14 +1,11 @@
 import pandas as pd
 import streamlit as st
 import torch
+from astropy.time import Time
 
-from astro_project.pipeline.data_fetcher import (
-    SURVEY_TELESCOPE_PRESETS,
-    generate_or_fetch_survey_fields,
-)
+from astro_project.core.hardware import resolve_device
+from astro_project.pipeline.data_fetcher import generate_or_fetch_survey_fields
 from astro_project.pipeline.survey_engine import run_automated_survey_batch
-from astro_project.pipeline.ztf_fetcher import query_ztf_archive, download_ztf_batch
-from astro_project.pipeline.ps1_fetcher import query_ps1_archive, download_ps1_batch
 
 
 def render_survey_tab(device: str | torch.device):
@@ -30,15 +27,28 @@ def render_survey_tab(device: str | torch.device):
 
     if data_source == "Multi-Teleskop Archive (Live)":
         st.markdown("### Archive Query Parameters \u2604\ufe0f")
-        col_ztf1, col_ztf2, col_ztf3, col_ztf4 = st.columns(4)
-        with col_ztf1:
-            ztf_ra = st.number_input("RA (deg)", value=180.0, key="ztf_ra")
-        with col_ztf2:
-            ztf_dec = st.number_input("Dec (deg)", value=25.0, key="ztf_dec")
-        with col_ztf3:
-            ztf_mjd_start = st.number_input("MJD Start", value=58200.0, key="ztf_mjd_start")
-        with col_ztf4:
-            ztf_mjd_end = st.number_input("MJD End", value=58200.5, key="ztf_mjd_end")
+        date_input_method = st.radio(
+            "Date Input Method",
+            options=["Calendar \U0001f4c5", "MJD \u23f1\ufe0f"],
+            horizontal=True,
+            key="date_input_method"
+        )
+
+        if date_input_method == "Calendar \U0001f4c5":
+            col_ztf1, col_ztf2 = st.columns(2)
+            with col_ztf1:
+                ztf_start_date = st.date_input("Start Date", value=pd.Timestamp.now().date(), key="ztf_start_date")
+            with col_ztf2:
+                ztf_end_date = st.date_input("End Date", value=pd.Timestamp.now().date() + pd.Timedelta(days=1), key="ztf_end_date")
+            ztf_mjd_start = Time(str(ztf_start_date)).mjd
+            ztf_mjd_end = Time(str(ztf_end_date)).mjd
+        else:
+            col_ztf3, col_ztf4 = st.columns(2)
+            with col_ztf3:
+                ztf_mjd_start = st.number_input("MJD Start", value=58200.0, key="ztf_mjd_start")
+            with col_ztf4:
+                ztf_mjd_end = st.number_input("MJD End", value=58200.5, key="ztf_mjd_end")
+
         n_fields = 1
     else:
         ztf_ra = ztf_dec = ztf_mjd_start = ztf_mjd_end = None
@@ -99,88 +109,12 @@ def render_survey_tab(device: str | torch.device):
             key="survey_auto_purge",
         )
 
-    if st.button(
-        "\U0001f680 Start Automated Archive Survey",
-        type="primary",
-        use_container_width=True,
-        key="start_automated_survey_btn",
-    ):
-        with st.status("Staging survey fields & running GPU velocity search...") as status_container:
-            if data_source == "Multi-Teleskop Archive (Live)":
-                st.info(f"Querying database for {telescope} epochs...")
-                try:
-                    if telescope.startswith("ZTF"):
-                        epochs = query_ztf_archive(ztf_ra, ztf_dec, ztf_mjd_start, ztf_mjd_end)
-                        download_func = download_ztf_batch
-                        dest_dir = "data/staging/ztf_live"
-                    elif telescope.startswith("PanSTARRS"):
-                        epochs = query_ps1_archive(ztf_ra, ztf_dec, ztf_mjd_start, ztf_mjd_end)
-                        download_func = download_ps1_batch
-                        dest_dir = "data/staging/ps1_live"
-                    else:
-                        status_container.update(label="Abgebrochen: Teleskop nicht unterstuetzt", state="error")
-                        st.warning(f"Live-Abruf fuer {telescope} ist noch nicht implementiert.")
-                        st.stop()
-                    
-                    if not epochs:
-                        status_container.update(label="Abgebrochen: Keine Frames gefunden", state="error")
-                        st.warning("No frames found for the given coordinates and time range.")
-                        st.stop()
-                        
-                    st.info(f"Found {len(epochs)} frames. Downloading to staging...")
-                    downloaded_files = download_func(epochs, dest_dir=dest_dir)
-                except Exception as e:
-                    status_container.update(label="Abgebrochen: Archiv-Fehler", state="error")
-                    st.error(f"Archiv-Fehler: {e}")
-                    st.info("Versuche es spaeter erneut oder nutze voruebergehend den Synthetic Benchmark Modus.")
-                    st.stop()
-                
-                field_batches = [{
-                    "field_id": f"live_{telescope}_{ztf_ra}_{ztf_dec}",
-                    "telescope": telescope,
-                    "file_paths": downloaded_files,
-                    "has_ground_truth": False
-                }]
-            else:
-                active_indices = [i for i in (1, 3) if i < int(n_fields)]
-                if not active_indices and int(n_fields) > 0:
-                    active_indices = [0]
+    with st.form(key="survey_form"):
+        submitted = st.form_submit_button(label="\U0001f680 Start Automated Archive Survey", type="primary", use_container_width=True)
 
-                field_batches = generate_or_fetch_survey_fields(
-                    base_data_dir="data",
-                    telescope=telescope,
-                    n_fields=int(n_fields),
-                    active_field_indices=active_indices,
-                    device=device,
-                )
-
-            results = run_automated_survey_batch(
-                field_batches=field_batches,
-                base_data_dir="data",
-                device=device,
-                stack_detection_sigma=float(stack_detection_sigma),
-                min_keep_score=float(min_keep_score),
-                auto_purge=bool(auto_purge),
-            )
-            status_container.update(label="Survey Batch Complete", state="complete")
-            st.session_state["survey_last_results"] = results
-
-    results = st.session_state.get("survey_last_results")
-    if results is not None:
-        st.markdown("---")
-        st.markdown("### \U0001f4ca Survey Batch Summary")
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Scanned Fields", int(results.get("scanned", 0)))
-        m2.metric("Empty/Purged", int(results.get("empty_purged", 0)))
-        m3.metric("\u2b50 Gold Candidates", int(results.get("gold_saved", 0)))
-        m4.metric("\U0001f948 Silver Candidates", int(results.get("silver_saved", 0)))
-
-        candidates_list = results.get("candidates_list", [])
-        if candidates_list:
-            st.markdown("### \U0001f3af Discovered Candidates")
-            display_cols = ["field_id", "tier", "score", "coherence", "peak"]
-            df_cands = pd.DataFrame(candidates_list)
-            available_cols = [c for c in display_cols if c in df_cands.columns]
-            st.dataframe(df_cands[available_cols], use_container_width=True)
-        else:
-            st.info("No candidates above the keep score threshold in this batch.")
+        if submitted:
+            with st.spinner("Running Archive Scan... \u231b"):
+                dev = resolve_device(st.session_state.get("selected_dev", "cpu"))
+                batches = generate_or_fetch_survey_fields(telescope=telescope, n_fields=2, active_field_indices=[1], device=dev)
+                summary = run_automated_survey_batch(field_batches=batches, device=dev)
+            st.success(f"Scan complete \u2705 Gold: {summary['gold_saved']} | Silver: {summary['silver_saved']} | Purged: {summary['empty_purged']}")
