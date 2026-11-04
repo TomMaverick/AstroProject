@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Sequence
 import requests
 from astropy.table import Table
+import streamlit as st
 
 logger = logging.getLogger(__name__)
 
@@ -23,16 +24,24 @@ def query_ps1_archive(ra_deg: float, dec_deg: float, mjd_start: float, mjd_end: 
     try:
         response = requests.post(url, data=data, files=files, timeout=30)
         if response.status_code != 200:
-            raise RuntimeError(f"PS1 API error: {response.text[:300]}")
+            err_msg = f"PS1 API error: {response.text[:300]}"
+            print(f"PS1 API ERROR: {err_msg}")
+            st.error(f"PS1 API Fehler: {err_msg}")
+            raise RuntimeError(err_msg)
     except requests.RequestException as e:
         logger.error(f"Failed to query PS1 filenames API: {e}")
+        print(f"PS1 API ERROR: {e}")
+        st.error(f"PS1 API Fehler: {e}")
         return []
 
     try:
         table = Table.read(response.text, format="ascii")
         logger.info(f"Parsed PS1 table with {len(table)} rows. Columns: {table.colnames}")
     except Exception as e:
-        logger.error(f"Failed to parse PS1 ASCII response: {e}. Raw response: {response.text}")
+        err_msg = f"Failed to parse PS1 ASCII response: {e}. Raw response: {response.text[:500]}"
+        logger.error(err_msg)
+        print(f"PS1 API ERROR: {err_msg}")
+        st.error(f"PS1 API Fehler: {err_msg}")
         return []
 
     results = []
@@ -106,5 +115,7 @@ def download_ps1_batch(query_results: list[dict], dest_dir: str | Path = "data/s
 
         except requests.RequestException as e:
             logger.error(f"Failed to download PS1 cutout: {e}")
+            print(f"PS1 DOWNLOAD ERROR: {e}")
+            st.error(f"PS1 Download Fehler: {e}")
 
     return downloaded_files
