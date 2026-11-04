@@ -318,34 +318,40 @@ def run_automated_survey_batch(
             field_id = str(batch.get("field_id", "unknown_field"))
             telescope = str(batch.get("telescope", "ZTF_Palomar_48in"))
             data_src = str(batch.get("data_source_type", "unknown"))
-            file_paths = [str(p) for p in batch.get("file_paths", []) if Path(p).is_file()]
-            
-            if len(file_paths) < 2:
-                if auto_purge:
-                    _purge_files(file_paths)
-                empty_purged += 1
-                continue
-
-            frames_list: list[torch.Tensor] = []
-            wcs_list = []
+            # Extrahiere mjd_start, mjd_end, ra_deg und dec_deg direkt aus den Batch-Metadaten
             mjd_list: list[float] = []
             ra_deg = 180.0
             dec_deg = 45.0
+
+            for idx, fpath in enumerate(batch.get("file_paths", [])):
+                if Path(fpath).is_file():
+                    _, wcs_obj, hdr = load_fits_image(fpath, device=resolved_dev, nan_fill=0.0)
+                    if hdr is not None:
+                        if "MJD-OBS" in hdr:
+                            mjd_list.append(float(hdr["MJD-OBS"]))
+                        else:
+                            mjd_list.append(60000.0 + idx * (0.5 / 24.0))
+                        if idx == 0:
+                            ra_deg = float(hdr.get("CRVAL1", ra_deg))
+                            dec_deg = float(hdr.get("CRVAL2", dec_deg))
+                    else:
+                        mjd_list.append(60000.0 + idx * (0.5 / 24.0))
+
+            if len(mjd_list) < 2:
+                if auto_purge:
+                    _purge_files(batch.get("file_paths", []))
+                empty_purged += 1
+                continue
+
+            file_paths = [str(p) for p in batch.get("file_paths", []) if Path(p).is_file()]
+               
+            frames_list: list[torch.Tensor] = []
+            wcs_list = []
 
             for idx, fpath in enumerate(file_paths):
                 img, wcs_obj, hdr = load_fits_image(fpath, device=resolved_dev, nan_fill=0.0)
                 frames_list.append(img)
                 wcs_list.append(wcs_obj)
-                if hdr is not None:
-                    if "MJD-OBS" in hdr:
-                        mjd_list.append(float(hdr["MJD-OBS"]))
-                    else:
-                        mjd_list.append(60000.0 + idx * (0.5 / 24.0))
-                    if idx == 0:
-                        ra_deg = float(hdr.get("CRVAL1", ra_deg))
-                        dec_deg = float(hdr.get("CRVAL2", dec_deg))
-                else:
-                    mjd_list.append(60000.0 + idx * (0.5 / 24.0))
 
             mjd_start = min(mjd_list)
             mjd_end = max(mjd_list)
