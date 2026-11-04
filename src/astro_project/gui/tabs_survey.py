@@ -7,6 +7,7 @@ from astro_project.pipeline.data_fetcher import (
     generate_or_fetch_survey_fields,
 )
 from astro_project.pipeline.survey_engine import run_automated_survey_batch
+from astro_project.pipeline.ztf_fetcher import query_ztf_archive, download_ztf_batch
 
 
 def render_survey_tab(device: str | torch.device):
@@ -17,7 +18,29 @@ def render_survey_tab(device: str | torch.device):
         "deduplicates via 64-bit Blake2b SQLite ledger, and auto-purges empty staging fields."
     )
 
+    data_source = st.radio(
+        "Data Source",
+        options=["Synthetic Benchmark (Mock Data)", "ZTF Public Archive (Live)"],
+        horizontal=True,
+        key="survey_data_source"
+    )
+
     preset_keys = list(SURVEY_TELESCOPE_PRESETS.keys())
+
+    if data_source == "ZTF Public Archive (Live)":
+        st.markdown("### ZTF Archive Query Parameters \u2604\ufe0f")
+        col_ztf1, col_ztf2, col_ztf3, col_ztf4 = st.columns(4)
+        with col_ztf1:
+            ztf_ra = st.number_input("RA (deg)", value=180.0, key="ztf_ra")
+        with col_ztf2:
+            ztf_dec = st.number_input("Dec (deg)", value=25.0, key="ztf_dec")
+        with col_ztf3:
+            ztf_mjd_start = st.number_input("MJD Start", value=58200.0, key="ztf_mjd_start")
+        with col_ztf4:
+            ztf_mjd_end = st.number_input("MJD End", value=58200.5, key="ztf_mjd_end")
+        n_fields = 1
+    else:
+        ztf_ra = ztf_dec = ztf_mjd_start = ztf_mjd_end = None
 
     col_cfg1, col_cfg2, col_cfg3 = st.columns(3)
     with col_cfg1:
@@ -27,14 +50,15 @@ def render_survey_tab(device: str | torch.device):
             format_func=lambda k: f"{k} ({SURVEY_TELESCOPE_PRESETS[k]['label']})",
             key="survey_telescope_select",
         )
-        n_fields = st.number_input(
-            "Number of Fields (n_fields)",
-            min_value=1,
-            max_value=50,
-            value=5,
-            step=1,
-            key="survey_n_fields",
-        )
+        if data_source == "Synthetic Benchmark (Mock Data)":
+            n_fields = st.number_input(
+                "Number of Fields (n_fields)",
+                min_value=1,
+                max_value=50,
+                value=5,
+                step=1,
+                key="survey_n_fields",
+            )
 
     with col_cfg2:
         min_keep_score = st.slider(
@@ -74,17 +98,35 @@ def render_survey_tab(device: str | torch.device):
         key="start_automated_survey_btn",
     ):
         with st.spinner("Staging survey fields & running GPU velocity search..."):
-            active_indices = [i for i in (1, 3) if i < int(n_fields)]
-            if not active_indices and int(n_fields) > 0:
-                active_indices = [0]
+            if data_source == "ZTF Public Archive (Live)":
+                st.info("Querying IRSA database for ZTF epochs...")
+                epochs = query_ztf_archive(ztf_ra, ztf_dec, ztf_mjd_start, ztf_mjd_end)
+                
+                if not epochs:
+                    st.warning("No ZTF frames found for the given coordinates and time range.")
+                    st.stop()
+                    
+                st.info(f"Found {len(epochs)} frames. Downloading to staging...")
+                downloaded_files = download_ztf_batch(epochs, dest_dir="data/staging/ztf_live")
+                
+                field_batches = [{
+                    "field_id": f"ztf_live_{ztf_ra}_{ztf_dec}",
+                    "telescope": "ZTF_Palomar_48in",
+                    "file_paths": downloaded_files,
+                    "has_ground_truth": False
+                }]
+            else:
+                active_indices = [i for i in (1, 3) if i < int(n_fields)]
+                if not active_indices and int(n_fields) > 0:
+                    active_indices = [0]
 
-            field_batches = generate_or_fetch_survey_fields(
-                base_data_dir="data",
-                telescope=telescope,
-                n_fields=int(n_fields),
-                active_field_indices=active_indices,
-                device=device,
-            )
+                field_batches = generate_or_fetch_survey_fields(
+                    base_data_dir="data",
+                    telescope=telescope,
+                    n_fields=int(n_fields),
+                    active_field_indices=active_indices,
+                    device=device,
+                )
 
             results = run_automated_survey_batch(
                 field_batches=field_batches,
