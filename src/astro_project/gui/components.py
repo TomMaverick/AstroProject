@@ -213,6 +213,7 @@ def render_sidebar_controls() -> tuple[torch.device, str]:
             "FITS-Inspector & Photometry",
             "Velocity Grid Search & Orbit Analysis",
             "Automated Survey",
+            "Candidate Inspector",
         ]
         for item in nav_items:
             is_active = st.session_state["nav_selection"] == item

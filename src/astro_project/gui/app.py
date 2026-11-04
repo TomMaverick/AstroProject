@@ -10,7 +10,10 @@ import streamlit as st
 
 from astro_project.gui.components import render_sidebar_controls
 from astro_project.gui.styles import DARK_MODE_CSS
-from astro_project.gui.tabs_inspector import render_tab_fits_inspector
+from astro_project.gui.tabs_inspector import (
+    render_inspector_tab,
+    render_tab_fits_inspector,
+)
 from astro_project.gui.tabs_pipeline import render_tab_pipeline_grid_search
 from astro_project.gui.tabs_survey import render_survey_tab
 
@@ -24,6 +27,8 @@ def main():
         render_tab_fits_inspector(device)
     elif nav_selection == "Automated Survey":
         render_survey_tab(device)
+    elif nav_selection == "Candidate Inspector":
+        render_inspector_tab("data")
     else:
         render_tab_pipeline_grid_search(device)
 

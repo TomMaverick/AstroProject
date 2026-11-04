@@ -1,3 +1,4 @@
+import json
 import tempfile
 import warnings
 from pathlib import Path
@@ -12,6 +13,11 @@ from photutils.detection.daofinder import NoDetectionsWarning
 from astro_project.core.fits_loader import load_fits_image
 from astro_project.core.photometry import detect_sources, estimate_background
 from astro_project.core.wcs_utils import sources_to_skycoords
+from astro_project.gui.candidate_viewer import (
+    create_blinking_gif,
+    load_candidate_data,
+    render_stamp_to_image,
+)
 from astro_project.gui.components import _plot_inspector_frame, show_parameter_help_dialog
 
 
@@ -194,3 +200,100 @@ def render_tab_fits_inspector(device: torch.device):
                 pass
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+
+def render_inspector_tab(base_data_dir: str | Path = "data"):
+    """Interactive Candidate Inspector for Gold and Silver tier discoveries."""
+    st.subheader("\U0001f50d Candidate Inspector (Gold & Silver Tier)")
+
+    base_path = Path(base_data_dir)
+    candidates_root = base_path / "candidates"
+
+    candidate_entries: list[dict] = []
+    for tier_folder, tier_label, tier_icon in [
+        ("gold_tier", "GOLD", "\u2b50"),
+        ("silver_tier", "SILVER", "\U0001f948"),
+    ]:
+        tier_dir = candidates_root / tier_folder
+        if tier_dir.is_dir():
+            for subdir in sorted([d for d in tier_dir.iterdir() if d.is_dir()]):
+                candidate_entries.append(
+                    {
+                        "label": f"{tier_icon} [{tier_label}] {subdir.name}",
+                        "name": subdir.name,
+                        "tier": tier_label,
+                        "path": subdir,
+                    }
+                )
+
+    if not candidate_entries:
+        st.info(
+            "No saved candidates found in `data/candidates/gold_tier` or `data/candidates/silver_tier`. "
+            "Run the Automated Survey first to discover and archive candidates."
+        )
+        return
+
+    labels = [entry["label"] for entry in candidate_entries]
+    selected_label = st.selectbox(
+        "Select Candidate Directory",
+        options=labels,
+        index=0,
+    )
+    selected_entry = next(
+        (e for e in candidate_entries if e["label"] == selected_label),
+        candidate_entries[0],
+    )
+    cand_dir: Path = selected_entry["path"]
+
+    try:
+        cand_data = load_candidate_data(cand_dir)
+    except Exception as exc:
+        st.error(f"Failed to load candidate data from `{cand_dir}`: {exc}")
+        return
+
+    stack_stamp = cand_data["stack_stamp"]
+    frame_stamps = cand_data["frame_stamps"]
+    metadata = cand_data.get("metadata", {})
+
+    stack_img = render_stamp_to_image(stack_stamp)
+    gif_bytes = create_blinking_gif(frame_stamps, duration_ms=200)
+
+    col_left, col_right = st.columns(2)
+    with col_left:
+        st.markdown("#### Kinematic Stack")
+        st.image(stack_img, caption="Kinematic Stack (32x32)", use_container_width=True)
+    with col_right:
+        st.markdown("#### Sub-Sigma Trajectory")
+        st.image(gif_bytes, caption="Sub-Sigma Trajectory Blinking GIF", use_container_width=True)
+
+    score_val = float(metadata.get("score", metadata.get("discovery_score", 0.0)))
+    cnn_prob = float(metadata.get("cnn_score", 0.0))
+    coherence_val = float(metadata.get("coherence", 0.0))
+    orbit_info = metadata.get("orbit", {}) if isinstance(metadata.get("orbit"), dict) else {}
+    a_au = orbit_info.get("a_au")
+    e_val = orbit_info.get("e")
+    orbit_class = str(orbit_info.get("orbit_class", "Unknown"))
+
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("Discovery Score", f"{score_val:.1f} / 100")
+    m2.metric("CNN Probability", f"{cnn_prob:.2f}")
+    m3.metric("Coherence", f"{coherence_val:.2f}")
+    m4.metric(
+        "Semi-Major Axis (a)",
+        f"{float(a_au):.2f} AU" if isinstance(a_au, (int, float)) else "N/A",
+    )
+    m5.metric(
+        "Eccentricity (e) / Class",
+        f"{float(e_val):.2f} ({orbit_class})" if isinstance(e_val, (int, float)) else orbit_class,
+    )
+
+    mpc_path = cand_dir / "mpc80.txt"
+    st.markdown("#### \U0001f4c4 MPC 80-Column Astrometry Report (`mpc80.txt`)")
+    if mpc_path.is_file():
+        mpc_text = mpc_path.read_text(encoding="utf-8").rstrip("\n")
+        st.code(mpc_text, language="text")
+    else:
+        st.info("No `mpc80.txt` file found in this candidate directory.")
+
+    with st.expander("\U0001f4cb Raw Candidate Metadata (`metadata.json`)"):
+        st.code(json.dumps(metadata, indent=2), language="json")
