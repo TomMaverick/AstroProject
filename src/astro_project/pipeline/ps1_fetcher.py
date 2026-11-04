@@ -19,17 +19,25 @@ def query_ps1_archive(ra_deg: float, dec_deg: float, mjd_start: float, mjd_end: 
     cbuf = StringIO(f"{ra_deg} {dec_deg}")
     files = {"file": cbuf}
 
+    logger.info(f"Querying PS1 API: {url} with data={data}, ra={ra_deg}, dec={dec_deg}")
     try:
         response = requests.post(url, data=data, files=files, timeout=30)
+        if response.status_code != 200:
+            logger.error(f"PS1 API returned status {response.status_code}. Response: {response.text[:500]}")
         response.raise_for_status()
     except requests.RequestException as e:
         logger.error(f"Failed to query PS1 filenames API: {e}")
         return []
 
+    logger.debug(f"PS1 API raw response (first 300 chars): {response.text[:300]}")
     try:
         table = Table.read(response.text, format="ascii")
+        if len(table) == 0:
+            logger.warning(f"PS1 API returned empty table. Raw response: {response.text}")
+        else:
+            logger.info(f"Parsed PS1 table with {len(table)} rows. Columns: {table.colnames}")
     except Exception as e:
-        logger.error(f"Failed to parse PS1 ASCII response: {e}")
+        logger.error(f"Failed to parse PS1 ASCII response: {e}. Raw response: {response.text}")
         return []
 
     results = []
