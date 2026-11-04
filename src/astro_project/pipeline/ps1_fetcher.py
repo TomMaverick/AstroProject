@@ -1,27 +1,49 @@
+import logging
 from typing import Sequence
+from astropy.coordinates import SkyCoord
+import astropy.units as u
+from astroquery.mast import Observations
 
-def query_ps1_archive(ra: float, dec: float, mjd_start: float, mjd_end: float) -> list[dict]:
+logger = logging.getLogger(__name__)
+
+def query_ps1_archive(ra: float, dec: float, mjd_start: float, mjd_end: float, radius_arcmin: float = 20.0) -> list[dict]:
     """
-    Dummy implementation for querying the Pan-STARRS1 archive.
-    Replace this with actual logic to interact with the PS1 database.
+    Queries the MAST archive for Pan-STARRS1 epochs within a given region and time range.
     """
-    # Placeholder return value
-    return [
-        {
-            "target": "PS1_Object_001",
-            "mjd": mjd_start + 0.5,
-            "ra": ra,
-            "dec": dec,
-            "fits_url": "http://example.com/ps1_fits_001.fits"
-        },
-        {
-            "target": "PS1_Object_002",
-            "mjd": mjd_end - 0.5,
-            "ra": ra + 0.1,
-            "dec": dec + 0.1,
-            "fits_url": "http://example.com/ps1_fits_002.fits"
-        }
-    ]
+    coord = SkyCoord(ra=ra, dec=dec, unit=(u.deg, u.deg), frame='icrs')
+    
+    try:
+        obs_table = Observations.query_region(coord, radius=radius_arcmin * u.arcmin)
+    except Exception as e:
+        logger.error(f"Failed to query MAST archive: {e}")
+        return []
+        
+    logger.info(f"Found {len(obs_table)} raw entries in MAST before filtering.")
+    
+    results = []
+    for row in obs_table:
+        if row.get("obs_collection") != "PS1":
+            continue
+            
+        mjd = row.get("t_min")
+        if mjd is None or not (mjd_start <= mjd <= mjd_end):
+            continue
+            
+        data_url = row.get("dataURL")
+        if not data_url:
+            data_url = f"https://mast.stsci.edu/api/v0.1/Download/file?uri={row.get('obs_id', '')}"
+            
+        results.append({
+            "target": row.get("target_name", "PS1_Field"),
+            "mjd": mjd,
+            "ra": row.get("s_ra", ra),
+            "dec": row.get("s_dec", dec),
+            "fits_url": data_url
+        })
+        
+    # Sort chronologically by MJD
+    results.sort(key=lambda x: x["mjd"])
+    return results
 
 def download_ps1_batch(epochs: Sequence[dict], dest_dir: str = "data/staging") -> list[str]:
     """
