@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from pathlib import Path
@@ -8,46 +9,67 @@ logger = logging.getLogger(__name__)
 
 def query_ps1_archive(ra: float, dec: float, mjd_start: float, mjd_end: float, radius_arcmin: float = 20.0) -> list[dict]:
     """
-    Queries the official STScI Pan-STARRS Image Cutout API for epochs within a given region and time range.
+    Queries the official MAST API for Pan-STARRS1 epochs within a given region and time range.
     """
-    # Convert radius from arcmin to pixels (PS1 pixel scale is ~0.25 arcsec/pixel)
-    # 20 arcmin = 1200 arcsec = 4800 pixels. We use a reasonable default size.
-    size_pixels = int((radius_arcmin * 60) / 0.25)
-    
-    # The official API endpoint for getting filenames
-    url = f"https://ps1images.stsci.edu/cgi-bin/ps1filenames.py?ra={ra}&dec={dec}&size={size_pixels}&format=json"
+    url = "https://mast.stsci.edu/api/v0/invoke"
+    req_obj = {
+        "service": "Mast.Caom.Cone",
+        "params": {
+            "ra": ra,
+            "dec": dec,
+            "radius": radius_arcmin / 60.0
+        },
+        "format": "json",
+        "pagesize": 5000,
+        "removenullcolumns": True,
+        "timeout": 30
+    }
     
     try:
-        response = requests.get(url, timeout=30)
+        response = requests.post(url, data={"request": json.dumps(req_obj)}, timeout=30)
         response.raise_for_status()
-        data = response.json()
-    except Exception as e:
-        logger.error(f"Failed to query PS1 STScI API: {e}")
+        resp_data = response.json()
+    except requests.RequestException as e:
+        logger.error(f"Failed to query MAST API: {e}")
+        if 'response' in locals() and response is not None:
+            logger.error(f"Response text: {response.text}")
+        return []
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to decode MAST API JSON: {e}")
+        if 'response' in locals() and response is not None:
+            logger.error(f"Response text: {response.text}")
         return []
         
-    logger.info(f"Found {len(data)} raw entries in PS1 API before filtering.")
+    if resp_data.get("status") != "COMPLETE":
+        logger.error(f"MAST API returned non-COMPLETE status: {resp_data.get('status')}")
+        return []
+        
+    data_array = resp_data.get("data", [])
+    logger.info(f"Found {len(data_array)} raw entries in MAST API before filtering.")
     
     results = []
-    for row in data:
-        mjd = row.get("mjd")
+    for row in data_array:
+        if row.get("obs_collection") != "PS1":
+            continue
+            
+        mjd = row.get("t_min")
         if mjd is None or not (mjd_start <= mjd <= mjd_end):
             continue
             
-        # Construct the direct FITS download URL
-        # Format: https://ps1images.stsci.edu/cgi-bin/fitscut.cgi?red={filename}&format=fits&size={size}&ra={ra}&dec={dec}
-        filename = row.get("filename")
-        if not filename:
-            continue
-            
-        download_url = f"https://ps1images.stsci.edu/cgi-bin/fitscut.cgi?red={filename}&format=fits&size={size_pixels}&ra={ra}&dec={dec}"
+        data_url = row.get("dataURL")
+        if not data_url:
+            obs_id = row.get("obs_id", "")
+            data_url = f"https://mast.stsci.edu/api/v0.1/Download/file?uri={obs_id}"
+        elif not data_url.startswith("http"):
+            data_url = f"https://mast.stsci.edu/api/v0.1/Download/file?uri={data_url}"
             
         results.append({
-            "target": "PS1_Field",
+            "target": row.get("target_name", "PS1_Field"),
             "mjd": mjd,
-            "ra": ra,
-            "dec": dec,
-            "filter": row.get("filter", "unknown"),
-            "fits_url": download_url
+            "ra": row.get("s_ra", ra),
+            "dec": row.get("s_dec", dec),
+            "filter": row.get("filters", "unknown"),
+            "fits_url": data_url
         })
         
     # Sort chronologically by MJD
