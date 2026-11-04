@@ -97,29 +97,24 @@ def render_survey_tab(device: str | torch.device):
         use_container_width=True,
         key="start_automated_survey_btn",
     ):
-        with st.spinner("Staging survey fields & running GPU velocity search..."):
+        with st.status("Staging survey fields & running GPU velocity search...") as status_container:
             if data_source == "ZTF Public Archive (Live)":
                 st.info("Querying IRSA database for ZTF epochs...")
                 try:
                     epochs = query_ztf_archive(ztf_ra, ztf_dec, ztf_mjd_start, ztf_mjd_end)
                     
                     if not epochs:
+                        status_container.update(label="Abgebrochen: Keine Frames gefunden", state="error")
                         st.warning("No ZTF frames found for the given coordinates and time range.")
                         st.stop()
                         
                     st.info(f"Found {len(epochs)} frames. Downloading to staging...")
                     downloaded_files = download_ztf_batch(epochs, dest_dir="data/staging/ztf_live")
                 except Exception as e:
+                    status_container.update(label="Abgebrochen: Archiv-Fehler", state="error")
                     st.error(f"Archiv-Fehler: {e}")
                     st.info("Versuche es spaeter erneut oder nutze voruebergehend den Synthetic Benchmark Modus.")
                     st.stop()
-                
-                field_batches = [{
-                    "field_id": f"ztf_live_{ztf_ra}_{ztf_dec}",
-                    "telescope": "ZTF_Palomar_48in",
-                    "file_paths": downloaded_files,
-                    "has_ground_truth": False
-                }]
             else:
                 active_indices = [i for i in (1, 3) if i < int(n_fields)]
                 if not active_indices and int(n_fields) > 0:
@@ -141,6 +136,7 @@ def render_survey_tab(device: str | torch.device):
                 min_keep_score=float(min_keep_score),
                 auto_purge=bool(auto_purge),
             )
+            status_container.update(label="Survey Batch Complete", state="complete")
             st.session_state["survey_last_results"] = results
 
     results = st.session_state.get("survey_last_results")
