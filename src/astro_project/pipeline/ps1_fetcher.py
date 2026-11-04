@@ -15,27 +15,22 @@ def query_ps1_archive(ra_deg: float, dec_deg: float, mjd_start: float, mjd_end: 
     2. fitscut.cgi to build the direct FITS download URLs.
     """
     url = "https://ps1images.stsci.edu/cgi-bin/ps1filenames.py"
-    data = {"filters": band, "type": "warp"}
+    data = {"filters": band, "type": "stack,warp"}
     cbuf = StringIO(f"{ra_deg} {dec_deg}")
     files = {"file": cbuf}
 
-    logger.info(f"Querying PS1 API: {url} with data={data}, ra={ra_deg}, dec={dec_deg}")
+    logger.info(f"Querying PS1 API for RA={ra_deg}, Dec={dec_deg}, MJD={mjd_start}-{mjd_end}")
     try:
         response = requests.post(url, data=data, files=files, timeout=30)
         if response.status_code != 200:
-            logger.error(f"PS1 API returned status {response.status_code}. Response: {response.text[:500]}")
-        response.raise_for_status()
+            raise RuntimeError(f"PS1 API error: {response.text[:300]}")
     except requests.RequestException as e:
         logger.error(f"Failed to query PS1 filenames API: {e}")
         return []
 
-    logger.debug(f"PS1 API raw response (first 300 chars): {response.text[:300]}")
     try:
         table = Table.read(response.text, format="ascii")
-        if len(table) == 0:
-            logger.warning(f"PS1 API returned empty table. Raw response: {response.text}")
-        else:
-            logger.info(f"Parsed PS1 table with {len(table)} rows. Columns: {table.colnames}")
+        logger.info(f"Parsed PS1 table with {len(table)} rows. Columns: {table.colnames}")
     except Exception as e:
         logger.error(f"Failed to parse PS1 ASCII response: {e}. Raw response: {response.text}")
         return []
