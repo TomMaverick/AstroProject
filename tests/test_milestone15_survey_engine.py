@@ -159,7 +159,7 @@ def test_automated_survey_batch_tiered_storage_and_auto_purge(tmp_path: Path, de
         steps=5,
         single_frame_mask_sigma=8.0,
         stack_detection_sigma=5.0,
-        cnn_threshold=0.2,
+        cnn_threshold=0.0,
         min_keep_score=45.0,
         auto_purge=True,
         vx_range=(1.0, 3.0),
