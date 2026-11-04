@@ -99,7 +99,8 @@ def render_stamp_to_image(
     rgba = cmap(uint8_scaled)
     rgb_uint8 = np.clip(rgba[..., :3] * 255.0, 0.0, 255.0).astype(np.uint8)
 
-    return Image.fromarray(rgb_uint8)
+    img = Image.fromarray(rgb_uint8)
+    return img.resize((256, 256), resample=Image.Resampling.NEAREST)
 
 
 def create_blinking_gif(
