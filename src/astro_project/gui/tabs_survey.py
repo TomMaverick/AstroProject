@@ -4,7 +4,10 @@ import torch
 from astropy.time import Time
 
 from astro_project.core.hardware import resolve_device
-from astro_project.pipeline.data_fetcher import generate_or_fetch_survey_fields
+from astro_project.pipeline.data_fetcher import (
+    SURVEY_TELESCOPE_PRESETS,
+    generate_or_fetch_survey_fields,
+)
 from astro_project.pipeline.survey_engine import run_automated_survey_batch
 
 
