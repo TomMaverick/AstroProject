@@ -177,6 +177,9 @@ def generate_or_fetch_survey_fields(
             has_object = idx in active_set
             snr_val = float(asteroid_snr) if has_object else 0.0
 
+            # Setze n_stars abhängig von has_object
+            n_stars_val = 5 if has_object else 0
+
             paths, _, gt = generate_custom_asteroid_series(
                 output_dir=field_dir,
                 n_frames=int(n_frames),
@@ -185,7 +188,7 @@ def generate_or_fetch_survey_fields(
                 vx=float(vx),
                 vy=float(vy),
                 asteroid_snr=snr_val,
-                n_stars=5,
+                n_stars=n_stars_val,  # Übergeben von n_stars
                 randomize=False,
                 seed=int(seed) + idx * 17,
                 device=device,
