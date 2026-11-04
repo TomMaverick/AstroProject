@@ -315,6 +315,12 @@ def run_automated_survey_batch(
         cnn_model.eval()
 
         for batch in field_batches:
+            # Überprüfen, ob das Feld bereits gescannt wurde
+            if "field_hash" in batch and ledger.is_scanned(int(batch["field_hash"])):
+                print(f"DEBUG: Field {batch.get('field_id', 'unknown_field')} (hash {batch['field_hash']}) already scanned! Skipping.")
+                skipped_cached += 1
+                continue
+
             field_id = str(batch.get("field_id", "unknown_field"))
             telescope = str(batch.get("telescope", "ZTF_Palomar_48in"))
             data_src = str(batch.get("data_source_type", "unknown"))
@@ -362,6 +368,9 @@ def run_automated_survey_batch(
                 mjd_start=mjd_start,
                 mjd_end=mjd_end,
             )
+
+            # Speichern des berechneten field_hash im Batch
+            batch["field_hash"] = field_hash
 
             if ledger.is_scanned(field_hash):
                 print(f"DEBUG: Field {field_id} (hash {field_hash}) already scanned! Skipping.")
