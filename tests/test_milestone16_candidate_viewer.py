@@ -86,15 +86,15 @@ def test_render_stamp_to_image_returns_valid_pil_image():
     img = render_stamp_to_image(stamp, vmin_p=2.0, vmax_p=98.0)
 
     assert isinstance(img, Image.Image)
-    # PIL size is (width, height) == (40, 32) for [Y=32, X=40]
-    assert img.size == (40, 32)
+    # PIL size is now scaled to (256, 256)
+    assert img.size == (256, 256)
     assert img.mode == "RGB"
 
     # Also test (1, 32, 32) singleton-channel input
     stamp_3d_singleton = np.ones((1, 32, 32), dtype=np.float32)
     img_singleton = render_stamp_to_image(stamp_3d_singleton)
     assert isinstance(img_singleton, Image.Image)
-    assert img_singleton.size == (32, 32)
+    assert img_singleton.size == (256, 256)
 
     # Multi-frame (5, 32, 32) must raise ValueError
     with pytest.raises(ValueError):
@@ -124,4 +124,4 @@ def test_create_blinking_gif_returns_valid_animated_gif_bytes():
         assert gif_img.format == "GIF"
         assert getattr(gif_img, "is_animated", False) is True
         assert getattr(gif_img, "n_frames", 1) == n_frames
-        assert gif_img.size == (width, height)
+        assert gif_img.size == (256, 256)
