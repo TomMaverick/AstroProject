@@ -42,7 +42,7 @@ def query_ztf_archive(
         if not (mjd_start <= obsjd <= mjd_end):
             continue
             
-        if filtercode != target_filter:
+        if filtercode != target_filter and filtercode != band:
             continue
 
         # Extract URL
@@ -59,6 +59,7 @@ def query_ztf_archive(
         results.append({
             "filefracday": row.get("filefracday"),
             "obsjd": obsjd,
+            "mjd": obs_mjd,  # Add MJD to result
             "ra": row.get("ra"),
             "dec": row.get("dec"),
             "seeing": row.get("seeing"),

@@ -149,6 +149,9 @@ def generate_or_fetch_survey_fields(
     vy: float = -1.0,
     seed: int = 42,
     device: torch.device | str = "cpu",
+    base_ra: float = 180.0,  # New parameter
+    base_dec: float = 25.0,  # New parameter
+    base_mjd: float = 60000.0  # New parameter
 ) -> list[dict]:
     """
     Populates `base_data_dir / 'staging'` with N blind-survey fields.
@@ -200,8 +203,8 @@ def generate_or_fetch_survey_fields(
             # Shift RA/Dec per field in FITS headers so each field has a distinct sky hash
             from astropy.io import fits
 
-            ra_field = 180.0 + idx * 1.25
-            dec_field = 25.0 + idx * 0.75
+            ra_field = float(base_ra) + idx * 1.25
+            dec_field = float(base_dec) + idx * 0.75
             for fpath in paths:
                 with fits.open(fpath, mode="update") as hdul:
                     hdul[0].header["CRVAL1"] = ra_field

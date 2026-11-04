@@ -17,7 +17,7 @@ def query_ps1_archive(ra_deg: float, dec_deg: float, mjd_start: float, mjd_end: 
     2. fitscut.cgi to build the direct FITS download URLs.
     """
     url = "https://ps1images.stsci.edu/cgi-bin/ps1filenames.py"
-    data = {"filters": band, "type": "stack,warp"}
+    data = {"filters": band, "type": "warp"}  # Changed from "stack,warp" to "warp"
     cbuf = StringIO(f"{ra_deg} {dec_deg}")
     files = {"file": cbuf}
 
@@ -61,13 +61,8 @@ def query_ps1_archive(ra_deg: float, dec_deg: float, mjd_start: float, mjd_end: 
         except (ValueError, TypeError):
             mjd = 0.0
 
-        if mjd == 0.0:
-            print(f"Row {i}: Keeping stack/warp image (MJD=0.0)")
-        elif not (mjd_start <= mjd <= mjd_end):
-            print(f"Row {i}: Filtering out MJD {mjd} (not in {mjd_start}-{mjd_end})")
+        if mjd <= 0.0:  # Skip rows with MJD <= 0.0
             continue
-        else:
-            print(f"Row {i}: Keeping MJD {mjd} (in range)")
 
         filename = str(row["filename"]) if "filename" in row.colnames else ""
         if not filename:
