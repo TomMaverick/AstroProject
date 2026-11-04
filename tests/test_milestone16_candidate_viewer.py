@@ -77,7 +77,7 @@ def test_load_candidate_data_success_and_missing_files(tmp_path: Path):
 
 
 def test_render_stamp_to_image_returns_valid_pil_image():
-    """Verify 2D stamp array is rendered to a PIL Image with matching dimensions."""
+    """Verify 2D and (1, H, W) stamp arrays render to PIL Images and invalid 3D arrays raise ValueError."""
     yy, xx = np.mgrid[0:32, 0:40]
     stamp = (
         100.0 * np.exp(-((xx - 20.0) ** 2 + (yy - 16.0) ** 2) / (2.0 * 2.5**2))
@@ -89,6 +89,16 @@ def test_render_stamp_to_image_returns_valid_pil_image():
     # PIL size is (width, height) == (40, 32) for [Y=32, X=40]
     assert img.size == (40, 32)
     assert img.mode == "RGB"
+
+    # Also test (1, 32, 32) singleton-channel input
+    stamp_3d_singleton = np.ones((1, 32, 32), dtype=np.float32)
+    img_singleton = render_stamp_to_image(stamp_3d_singleton)
+    assert isinstance(img_singleton, Image.Image)
+    assert img_singleton.size == (32, 32)
+
+    # Multi-frame (5, 32, 32) must raise ValueError
+    with pytest.raises(ValueError):
+        render_stamp_to_image(np.ones((5, 32, 32), dtype=np.float32))
 
 
 def test_create_blinking_gif_returns_valid_animated_gif_bytes():

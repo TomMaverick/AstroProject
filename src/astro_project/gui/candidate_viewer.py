@@ -68,7 +68,7 @@ def render_stamp_to_image(
     Parameters
     ----------
     stamp_array : np.ndarray
-        2D numpy array ``[H, W]`` representing the stamp flux.
+        2D numpy array ``[H, W]`` (or ``[1, H, W]``) representing the stamp flux.
     vmin_p : float, optional
         Lower percentile for contrast clipping, by default 2.0.
     vmax_p : float, optional
@@ -81,7 +81,7 @@ def render_stamp_to_image(
     PIL.Image.Image
         Rendered RGB PIL Image of size ``(W, H)``.
     """
-    arr = np.asarray(stamp_array, dtype=np.float32)
+    arr = np.squeeze(np.asarray(stamp_array, dtype=np.float32))
     if arr.ndim != 2:
         raise ValueError(f"Expected 2D stamp_array [H, W], got shape {arr.shape}")
 
@@ -99,7 +99,7 @@ def render_stamp_to_image(
     rgba = cmap(uint8_scaled)
     rgb_uint8 = np.clip(rgba[..., :3] * 255.0, 0.0, 255.0).astype(np.uint8)
 
-    return Image.fromarray(rgb_uint8, mode="RGB")
+    return Image.fromarray(rgb_uint8)
 
 
 def create_blinking_gif(
@@ -130,6 +130,8 @@ def create_blinking_gif(
         Animated GIF file bytes.
     """
     frames_arr = np.asarray(frame_stamps, dtype=np.float32)
+    if frames_arr.ndim == 4 and frames_arr.shape[1] == 1:
+        frames_arr = np.squeeze(frames_arr, axis=1)
     if frames_arr.ndim != 3 or frames_arr.shape[0] == 0:
         raise ValueError(
             f"Expected 3D frame_stamps [N, H, W] with N > 0, got shape {frames_arr.shape}"
