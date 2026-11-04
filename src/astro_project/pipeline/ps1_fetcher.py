@@ -6,6 +6,7 @@ from typing import Sequence
 import requests
 from astropy.table import Table
 import streamlit as st
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -21,14 +22,17 @@ def query_ps1_archive(ra_deg: float, dec_deg: float, mjd_start: float, mjd_end: 
     files = {"file": cbuf}
 
     logger.info(f"Querying PS1 API for RA={ra_deg}, Dec={dec_deg}, MJD={mjd_start}-{mjd_end}")
+    print(f"PS1 REQUEST: url={url}, data={data}, ra={ra_deg}, dec={dec_deg}")
     try:
         response = requests.post(url, data=data, files=files, timeout=30)
+        print(f"PS1 RESPONSE: status={response.status_code}, text={response.text[:300]}")
         if response.status_code != 200:
             err_msg = f"PS1 API error: {response.text[:300]}"
             print(f"PS1 API ERROR: {err_msg}")
             st.error(f"PS1 API Fehler: {err_msg}")
             raise RuntimeError(err_msg)
     except requests.RequestException as e:
+        traceback.print_exc()
         logger.error(f"Failed to query PS1 filenames API: {e}")
         print(f"PS1 API ERROR: {e}")
         st.error(f"PS1 API Fehler: {e}")
@@ -37,7 +41,12 @@ def query_ps1_archive(ra_deg: float, dec_deg: float, mjd_start: float, mjd_end: 
     try:
         table = Table.read(response.text, format="ascii")
         logger.info(f"Parsed PS1 table with {len(table)} rows. Columns: {table.colnames}")
+        print(f"PS1 Server returned {len(table)} raw rows.")
+        if len(table) > 0:
+            print("First up to 3 rows:")
+            print(table[:3])
     except Exception as e:
+        traceback.print_exc()
         err_msg = f"Failed to parse PS1 ASCII response: {e}. Raw response: {response.text[:500]}"
         logger.error(err_msg)
         print(f"PS1 API ERROR: {err_msg}")
@@ -46,17 +55,23 @@ def query_ps1_archive(ra_deg: float, dec_deg: float, mjd_start: float, mjd_end: 
 
     results = []
 
-    for row in table:
+    for i, row in enumerate(table):
         try:
             mjd = float(row["mjd"]) if "mjd" in row.colnames else 0.0
         except (ValueError, TypeError):
             mjd = 0.0
 
-        if "mjd" in row.colnames and not (mjd_start <= mjd <= mjd_end):
+        if mjd == 0.0:
+            print(f"Row {i}: Keeping stack/warp image (MJD=0.0)")
+        elif not (mjd_start <= mjd <= mjd_end):
+            print(f"Row {i}: Filtering out MJD {mjd} (not in {mjd_start}-{mjd_end})")
             continue
+        else:
+            print(f"Row {i}: Keeping MJD {mjd} (in range)")
 
         filename = str(row["filename"]) if "filename" in row.colnames else ""
         if not filename:
+            print(f"Row {i}: Filtering out due to missing filename")
             continue
 
         ra_val = float(row["ra"]) if "ra" in row.colnames else ra_deg
@@ -72,6 +87,9 @@ def query_ps1_archive(ra_deg: float, dec_deg: float, mjd_start: float, mjd_end: 
             "url": fits_url,
             "prod_type": "IMAGE"
         })
+
+    if len(results) == 0:
+        print("WARNING: 0 epochs passed MJD/filter constraints!")
 
     # Sort chronologically by MJD
     results.sort(key=lambda x: x["mjd"])
