@@ -15,8 +15,9 @@ def query_ps1_archive(ra_deg: float, dec_deg: float, mjd_start: float, mjd_end: 
     2. fitscut.cgi to build the direct FITS download URLs.
     """
     url = "https://ps1images.stsci.edu/cgi-bin/ps1filenames.py"
-    data = {"filters": band, "type": "stack"}
-    files = {"file": StringIO(f"{ra_deg} {dec_deg}")}
+    data = {"filters": band, "type": "warp"}
+    cbuf = StringIO(f"{ra_deg} {dec_deg}")
+    files = {"file": cbuf}
 
     try:
         response = requests.post(url, data=data, files=files, timeout=30)
