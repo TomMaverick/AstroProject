@@ -175,6 +175,7 @@ def generate_or_fetch_survey_fields(
     field_batches: list[dict] = []
     with torch.no_grad():
         for idx in range(int(n_fields)):
+            f_idx = idx  # Define f_idx before using it
             field_id = f"{telescope.lower()}_field_{idx:03d}"
             field_dir = staging_root / field_id
             has_object = idx in active_set
