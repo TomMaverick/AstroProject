@@ -1,4 +1,3 @@
-import json
 import logging
 import time
 from pathlib import Path
@@ -9,125 +8,66 @@ logger = logging.getLogger(__name__)
 
 def query_ps1_archive(ra: float, dec: float, mjd_start: float, mjd_end: float, radius_arcmin: float = 20.0) -> list[dict]:
     """
-    Queries the official MAST API for Pan-STARRS1 epochs using a two-step workflow:
-    1. Mast.Caom.Cone to find observations.
-    2. Mast.Caom.Products to get the actual FITS file URIs.
+    Queries the official STScI Pan-STARRS1 API for epochs using:
+    1. ps1filenames.py to find observations and filenames.
+    2. fitscut.cgi to build the direct FITS download URLs.
     """
-    url = "https://mast.stsci.edu/api/v0/invoke"
-    
-    # Step 1: Cone Search
-    cone_req = {
-        "service": "Mast.Caom.Cone",
-        "params": {
-            "ra": ra,
-            "dec": dec,
-            "radius": radius_arcmin / 60.0
-        },
-        "format": "json",
-        "pagesize": 5000,
-        "removenullcolumns": True,
-        "timeout": 30
-    }
+    # Step 1: Get filenames and metadata
+    url = f"https://ps1images.stsci.edu/cgi-bin/ps1filenames.py?ra={ra}&dec={dec}&filters=grizy"
     
     try:
-        response = requests.post(url, data={"request": json.dumps(cone_req)}, timeout=30)
+        response = requests.get(url, timeout=30)
         response.raise_for_status()
-        cone_data = response.json()
-    except (requests.RequestException, json.JSONDecodeError) as e:
-        logger.error(f"Failed to query MAST Cone API: {e}")
+        lines = response.text.strip().split('\n')
+    except requests.RequestException as e:
+        logger.error(f"Failed to query PS1 filenames API: {e}")
         return []
         
-    if cone_data.get("status") != "COMPLETE":
-        logger.error(f"MAST Cone API returned non-COMPLETE status: {cone_data.get('status')}")
+    if not lines or len(lines) < 2:
+        logger.info("No PS1 observations found.")
         return []
         
-    # NEU: Logging der rohen Datensaetze
-    raw_data = cone_data.get("data", [])
-    logger.info(f"MAST Cone API returned {len(raw_data)} raw records.")
-    for i, row in enumerate(raw_data[:3]):
-        logger.info(
-            f"Raw record {i}: obs_collection={row.get('obs_collection')}, "
-            f"target_name={row.get('target_name')}, t_min={row.get('t_min')}"
-        )
-        
-    obs_metadata = {}
-    for row in raw_data:
-        if row.get("obs_collection") != "PS1":
-            continue
-            
-        mjd = row.get("t_min")
-        # AENDERUNG: Strikten MJD-Filter temporaer gelockert fuer Debugging
-        if mjd is None:
-            continue
-            
-        obsid = row.get("obsid")
-        if obsid:
-            obs_metadata[str(obsid)] = {
-                "mjd": mjd,
-                "ra": row.get("s_ra", ra),
-                "dec": row.get("s_dec", dec),
-                "filter": row.get("filters", "unknown")
-            }
-            
-    if not obs_metadata:
-        logger.info("No PS1 observations found (filters might be too strict).")
-        return []
-        
-    # Step 2: Products Search
-    obsid_list = list(obs_metadata.keys())
-    prod_req = {
-        "service": "Mast.Caom.Products",
-        "params": {
-            "obsid": ",".join(obsid_list)
-        },
-        "format": "json",
-        "pagesize": 5000,
-        "removenullcolumns": True,
-        "timeout": 30
-    }
-    
-    try:
-        response = requests.post(url, data={"request": json.dumps(prod_req)}, timeout=30)
-        response.raise_for_status()
-        prod_data = response.json()
-    except (requests.RequestException, json.JSONDecodeError) as e:
-        logger.error(f"Failed to query MAST Products API: {e}")
-        return []
-        
+    header = lines[0].split()
     results = []
-    for prod in prod_data.get("data", []):
-        uri = prod.get("dataURI", "")
-        prod_type = prod.get("productType", "")
+    
+    for line in lines[1:]:
+        row = dict(zip(header, line.split()))
         
-        # AENDERUNG: Filter temporaer gelockert, um alle verfuegbaren Produkte zu sehen
-        # if not uri.lower().endswith(".fits") and prod_type != "IMAGE":
-        #     continue
-            
-        # Match back to observation metadata
-        parent_obsid = str(prod.get("obsID", ""))
-        meta = obs_metadata.get(parent_obsid)
-        if not meta:
+        try:
+            mjd = float(row.get("mjd", 0.0))
+        except ValueError:
             continue
             
-        download_url = f"https://mast.stsci.edu/api/v0/download/file?uri={uri}"
+        if not (mjd_start <= mjd <= mjd_end):
+            continue
+            
+        filename = row.get("filename", "")
+        if not filename:
+            continue
+            
+        filt = row.get("filter", "unknown")
+        
+        # Step 2: Build fitscut.cgi URL (using 'red' parameter to satisfy color requirement)
+        fits_url = f"https://ps1images.stsci.edu/cgi-bin/fitscut.cgi?ra={ra}&dec={dec}&size=240&format=fits&red={filename}"
         
         results.append({
             "target": "PS1_Field",
-            "mjd": meta["mjd"],
-            "ra": meta["ra"],
-            "dec": meta["dec"],
-            "filter": meta["filter"],
-            "fits_url": download_url,
-            "prod_type": prod_type  # Temporaer hinzugefuegt zur Analyse
+            "mjd": mjd,
+            "ra": ra,
+            "dec": dec,
+            "filter": filt,
+            "fits_url": fits_url,
+            "prod_type": "IMAGE"
         })
         
     # Sort chronologically by MJD
     results.sort(key=lambda x: x["mjd"])
+    logger.info(f"Found {len(results)} PS1 epochs in the specified MJD range.")
     return results
 
 def download_ps1_batch(epochs: Sequence[dict], dest_dir: str | Path = "data/staging", timeout: int = 60) -> list[str]:
     """
-    Downloads a batch of PS1 FITS files robustly, skipping existing files.
+    Downloads a batch of PS1 FITS files robustly via fitscut.cgi, skipping existing files.
     """
     dest_path = Path(dest_dir)
     dest_path.mkdir(parents=True, exist_ok=True)
