@@ -45,6 +45,9 @@ def query_ztf_archive(
         if filtercode != target_filter and filtercode != band:
             continue
 
+        # Convert Julian Date to MJD
+        obs_mjd = float(obsjd) - 2400000.5
+
         # Extract URL
         download_url = ""
         if "fileuri" in table.colnames:
