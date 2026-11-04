@@ -100,14 +100,19 @@ def render_survey_tab(device: str | torch.device):
         with st.spinner("Staging survey fields & running GPU velocity search..."):
             if data_source == "ZTF Public Archive (Live)":
                 st.info("Querying IRSA database for ZTF epochs...")
-                epochs = query_ztf_archive(ztf_ra, ztf_dec, ztf_mjd_start, ztf_mjd_end)
-                
-                if not epochs:
-                    st.warning("No ZTF frames found for the given coordinates and time range.")
-                    st.stop()
+                try:
+                    epochs = query_ztf_archive(ztf_ra, ztf_dec, ztf_mjd_start, ztf_mjd_end)
                     
-                st.info(f"Found {len(epochs)} frames. Downloading to staging...")
-                downloaded_files = download_ztf_batch(epochs, dest_dir="data/staging/ztf_live")
+                    if not epochs:
+                        st.warning("No ZTF frames found for the given coordinates and time range.")
+                        st.stop()
+                        
+                    st.info(f"Found {len(epochs)} frames. Downloading to staging...")
+                    downloaded_files = download_ztf_batch(epochs, dest_dir="data/staging/ztf_live")
+                except Exception as e:
+                    st.error(f"Archiv-Fehler: {e}")
+                    st.info("Versuche es spaeter erneut oder nutze voruebergehend den Synthetic Benchmark Modus.")
+                    st.stop()
                 
                 field_batches = [{
                     "field_id": f"ztf_live_{ztf_ra}_{ztf_dec}",
