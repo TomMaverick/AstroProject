@@ -356,9 +356,6 @@ def run_automated_survey_batch(
                 mjd_start=mjd_start,
                 mjd_end=mjd_end,
             )
-            
-            if data_src == "real":
-                field_id = f"mjd_{int(mjd_start)}_{telescope.lower()}_{field_hash}"
 
             if ledger.is_scanned(field_hash):
                 skipped_cached += 1
@@ -470,7 +467,10 @@ def run_automated_survey_batch(
                         times_hours=times_list,
                         base_mjd=mjd_start,
                     )
-                    orbit_info = estimate_kepler_orbit(epochs) if len(epochs) >= 2 else {}
+                    if len(epochs) >= 2:
+                        orbit_info = estimate_kepler_orbit(epochs)
+                    else:
+                        orbit_info = {}
                     score_info = compute_discovery_score(
                         candidate_row={"peak": peak_val, "cnn_score": cnn_prob},
                         frame_stamps=frame_stamps_np,
@@ -523,6 +523,11 @@ def run_automated_survey_batch(
 
             tier_label = "gold" if best_cand["score"] >= 75.0 else "silver"
             tier_folder = "gold_tier" if tier_label == "gold" else "silver_tier"
+            
+            data_src = batch.get("data_source_type", "unknown")
+            if data_src == "real":
+                field_id = f"mjd_{int(mjd_start)}_{telescope.lower()}_{field_hash}"
+                
             dest_dir = base_path / "candidates" / tier_folder / data_src / telescope.lower() / field_id
             dest_dir.mkdir(parents=True, exist_ok=True)
 
