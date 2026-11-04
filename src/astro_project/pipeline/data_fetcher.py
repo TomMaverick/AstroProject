@@ -209,6 +209,7 @@ def generate_or_fetch_survey_fields(
                 with fits.open(fpath, mode="update") as hdul:
                     hdul[0].header["CRVAL1"] = ra_field
                     hdul[0].header["CRVAL2"] = dec_field
+                    hdul[0].header["MJD-OBS"] = float(base_mjd) + f_idx * (dt_hours / 24.0)
                     hdul[0].header["TELESCOP"] = telescope
                     hdul.flush()
 
