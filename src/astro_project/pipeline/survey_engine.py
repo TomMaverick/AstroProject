@@ -529,8 +529,10 @@ def run_automated_survey_batch(
             data_src = batch.get("data_source_type", "unknown")
             if data_src == "real":
                 field_id = f"mjd_{int(mjd_start)}_{telescope.lower()}_{field_hash}"
-                
-            dest_dir = base_path / "candidates" / tier_folder / data_src / telescope.lower() / field_id
+                dest_dir = base_path / "candidates" / tier_folder / data_src / telescope.lower() / field_id
+            else:
+                dest_dir = base_path / "candidates" / tier_folder / field_id
+
             dest_dir.mkdir(parents=True, exist_ok=True)
 
             np.savez_compressed(
