@@ -8,6 +8,7 @@ from astro_project.pipeline.data_fetcher import (
 )
 from astro_project.pipeline.survey_engine import run_automated_survey_batch
 from astro_project.pipeline.ztf_fetcher import query_ztf_archive, download_ztf_batch
+from astro_project.pipeline.ps1_fetcher import query_ps1_archive, download_ps1_batch
 
 
 def render_survey_tab(device: str | torch.device):
@@ -20,15 +21,15 @@ def render_survey_tab(device: str | torch.device):
 
     data_source = st.radio(
         "Data Source",
-        options=["Synthetic Benchmark (Mock Data)", "ZTF Public Archive (Live)"],
+        options=["Synthetic Benchmark (Mock Data)", "Multi-Teleskop Archive (Live)"],
         horizontal=True,
         key="survey_data_source"
     )
 
     preset_keys = list(SURVEY_TELESCOPE_PRESETS.keys())
 
-    if data_source == "ZTF Public Archive (Live)":
-        st.markdown("### ZTF Archive Query Parameters \u2604\ufe0f")
+    if data_source == "Multi-Teleskop Archive (Live)":
+        st.markdown("### Archive Query Parameters \u2604\ufe0f")
         col_ztf1, col_ztf2, col_ztf3, col_ztf4 = st.columns(4)
         with col_ztf1:
             ztf_ra = st.number_input("RA (deg)", value=180.0, key="ztf_ra")
@@ -105,23 +106,41 @@ def render_survey_tab(device: str | torch.device):
         key="start_automated_survey_btn",
     ):
         with st.status("Staging survey fields & running GPU velocity search...") as status_container:
-            if data_source == "ZTF Public Archive (Live)":
-                st.info("Querying IRSA database for ZTF epochs...")
+            if data_source == "Multi-Teleskop Archive (Live)":
+                st.info(f"Querying database for {telescope} epochs...")
                 try:
-                    epochs = query_ztf_archive(ztf_ra, ztf_dec, ztf_mjd_start, ztf_mjd_end)
+                    if telescope.startswith("ZTF"):
+                        epochs = query_ztf_archive(ztf_ra, ztf_dec, ztf_mjd_start, ztf_mjd_end)
+                        download_func = download_ztf_batch
+                        dest_dir = "data/staging/ztf_live"
+                    elif telescope.startswith("PanSTARRS"):
+                        epochs = query_ps1_archive(ztf_ra, ztf_dec, ztf_mjd_start, ztf_mjd_end)
+                        download_func = download_ps1_batch
+                        dest_dir = "data/staging/ps1_live"
+                    else:
+                        status_container.update(label="Abgebrochen: Teleskop nicht unterstuetzt", state="error")
+                        st.warning(f"Live-Abruf fuer {telescope} ist noch nicht implementiert.")
+                        st.stop()
                     
                     if not epochs:
                         status_container.update(label="Abgebrochen: Keine Frames gefunden", state="error")
-                        st.warning("No ZTF frames found for the given coordinates and time range.")
+                        st.warning("No frames found for the given coordinates and time range.")
                         st.stop()
                         
                     st.info(f"Found {len(epochs)} frames. Downloading to staging...")
-                    downloaded_files = download_ztf_batch(epochs, dest_dir="data/staging/ztf_live")
+                    downloaded_files = download_func(epochs, dest_dir=dest_dir)
                 except Exception as e:
                     status_container.update(label="Abgebrochen: Archiv-Fehler", state="error")
                     st.error(f"Archiv-Fehler: {e}")
                     st.info("Versuche es spaeter erneut oder nutze voruebergehend den Synthetic Benchmark Modus.")
                     st.stop()
+                
+                field_batches = [{
+                    "field_id": f"live_{telescope}_{ztf_ra}_{ztf_dec}",
+                    "telescope": telescope,
+                    "file_paths": downloaded_files,
+                    "has_ground_truth": False
+                }]
             else:
                 active_indices = [i for i in (1, 3) if i < int(n_fields)]
                 if not active_indices and int(n_fields) > 0:
