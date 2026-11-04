@@ -41,13 +41,23 @@ def query_ps1_archive(ra: float, dec: float, mjd_start: float, mjd_end: float, r
         logger.error(f"MAST Cone API returned non-COMPLETE status: {cone_data.get('status')}")
         return []
         
+    # NEU: Logging der rohen Datensaetze
+    raw_data = cone_data.get("data", [])
+    logger.info(f"MAST Cone API returned {len(raw_data)} raw records.")
+    for i, row in enumerate(raw_data[:3]):
+        logger.info(
+            f"Raw record {i}: obs_collection={row.get('obs_collection')}, "
+            f"target_name={row.get('target_name')}, t_min={row.get('t_min')}"
+        )
+        
     obs_metadata = {}
-    for row in cone_data.get("data", []):
+    for row in raw_data:
         if row.get("obs_collection") != "PS1":
             continue
             
         mjd = row.get("t_min")
-        if mjd is None or not (mjd_start <= mjd <= mjd_end):
+        # AENDERUNG: Strikten MJD-Filter temporaer gelockert fuer Debugging
+        if mjd is None:
             continue
             
         obsid = row.get("obsid")
@@ -60,7 +70,7 @@ def query_ps1_archive(ra: float, dec: float, mjd_start: float, mjd_end: float, r
             }
             
     if not obs_metadata:
-        logger.info("No PS1 observations found in the given MJD range.")
+        logger.info("No PS1 observations found (filters might be too strict).")
         return []
         
     # Step 2: Products Search
@@ -89,8 +99,9 @@ def query_ps1_archive(ra: float, dec: float, mjd_start: float, mjd_end: float, r
         uri = prod.get("dataURI", "")
         prod_type = prod.get("productType", "")
         
-        if not uri.lower().endswith(".fits") and prod_type != "IMAGE":
-            continue
+        # AENDERUNG: Filter temporaer gelockert, um alle verfuegbaren Produkte zu sehen
+        # if not uri.lower().endswith(".fits") and prod_type != "IMAGE":
+        #     continue
             
         # Match back to observation metadata
         parent_obsid = str(prod.get("obsID", ""))
@@ -106,7 +117,8 @@ def query_ps1_archive(ra: float, dec: float, mjd_start: float, mjd_end: float, r
             "ra": meta["ra"],
             "dec": meta["dec"],
             "filter": meta["filter"],
-            "fits_url": download_url
+            "fits_url": download_url,
+            "prod_type": prod_type  # Temporaer hinzugefuegt zur Analyse
         })
         
     # Sort chronologically by MJD
