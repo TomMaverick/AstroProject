@@ -358,6 +358,7 @@ def run_automated_survey_batch(
             )
 
             if ledger.is_scanned(field_hash):
+                print(f"DEBUG: Field {field_id} (hash {field_hash}) already scanned! Skipping.")
                 skipped_cached += 1
                 continue
 
@@ -508,6 +509,7 @@ def run_automated_survey_batch(
                 if auto_purge:
                     _purge_files(file_paths)
                 empty_purged += 1
+                print(f"DEBUG: Field {field_id} yielded 0 candidates or score < threshold. Purged. empty_purged={empty_purged}")
                 ledger.record_scan(
                     field_hash=field_hash,
                     telescope=telescope,
