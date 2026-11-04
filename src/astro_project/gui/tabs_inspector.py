@@ -261,10 +261,10 @@ def render_inspector_tab(base_data_dir: str | Path = "data"):
     col_left, col_right = st.columns(2)
     with col_left:
         st.markdown("#### Kinematic Stack")
-        st.image(stack_img, caption="Kinematic Stack (32x32)", use_container_width=True)
+        st.image(stack_img, caption="Kinematic Stack (32x32)", width=350)
     with col_right:
         st.markdown("#### Sub-Sigma Trajectory")
-        st.image(gif_bytes, caption="Sub-Sigma Trajectory Blinking GIF", use_container_width=True)
+        st.image(gif_bytes, caption="Sub-Sigma Trajectory Blinking GIF", width=350)
 
     score_val = float(metadata.get("score", metadata.get("discovery_score", 0.0)))
     cnn_prob = float(metadata.get("cnn_score", 0.0))
